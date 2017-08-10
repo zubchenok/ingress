@@ -31,7 +31,7 @@ ALL_ARCH = amd64 arm arm64 ppc64le
 QEMUVERSION=v2.9.1
 
 IMGNAME = nginx-ingress-controller
-IMAGE = $(REGISTRY)/$(IMGNAME)
+IMAGE = $(REGISTRY)
 MULTI_ARCH_IMG = $(IMAGE)-$(ARCH)
 
 # Set default base image dynamically for each arch
