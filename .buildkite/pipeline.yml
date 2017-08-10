@@ -1,5 +1,0 @@
-- name: 'Build Ingress Controller'
-  command: pipa build -x --push -- .buildkite/make.sh $PIPA_IMAGE_FULL_NAME
-  label: ":cloud: Build Ingress Controller"
-  agents:
-    - queue=${BUILDKITE_AGENT_META_DATA_QUEUE}

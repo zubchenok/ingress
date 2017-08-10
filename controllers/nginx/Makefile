@@ -5,8 +5,8 @@ BUILDTAGS=
 # Use the 0.0 tag for testing, it shouldn't clobber any release builds
 TAG?=0.9.0-beta.11-shopify
 REGISTRY?=gcr.io/shopify-docker-images/cloud
-IMGNAME = nginx-ingress-controller
-IMAGE = $(REGISTRY)
+IMGNAME = nginx-ingress-controller-fork
+IMAGE = $(REGISTRY)/$(IMGNAME)
 GOOS?=linux
 DOCKER?=docker
 
@@ -22,7 +22,7 @@ ARCH ?= $(shell go env GOARCH)
 GOARCH = ${ARCH}
 
 container:
-	$(DOCKER) build --pull -t $(REGISTRY):$(TAG) rootfs
+	$(DOCKER) build --pull -t $(TAG) rootfs
 
 push: container
 	$(DOCKER) push $(IMAGE):$(TAG)
