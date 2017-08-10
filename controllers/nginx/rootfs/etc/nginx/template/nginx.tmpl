@@ -13,6 +13,10 @@ pid /run/nginx.pid;
 worker_rlimit_nofile {{ .MaxOpenFiles }};
 {{ end}}
 
+{{/* http://nginx.org/en/docs/ngx_core_module.html#worker_shutdown_timeout */}}
+{{/* avoid waiting too long during a reload */}}
+worker_shutdown_timeout 10s;
+
 events {
     multi_accept        on;
     worker_connections  {{ $cfg.MaxWorkerConnections }};
@@ -496,7 +500,7 @@ http {
     server {
         # Use the port 18080 (random value just to avoid known ports) as default port for nginx.
         # Changing this value requires a change in:
-        # https://github.com/kubernetes/contrib/blob/master/ingress/controllers/nginx/nginx/command.go#L104
+        # https://github.com/kubernetes/ingress/blob/master/controllers/nginx/pkg/cmd/controller/nginx.go
         listen 18080 default_server reuseport backlog={{ .BacklogSize }};
         {{ if $IsIPV6Enabled }}listen [::]:18080 default_server reuseport backlog={{ .BacklogSize }};{{ end }}
         set $proxy_upstream_name "-";

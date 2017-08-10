@@ -340,6 +340,11 @@ func (ic GenericController) GetDefaultBackend() defaults.Backend {
 	return ic.cfg.Backend.BackendDefaults()
 }
 
+// GetRecorder returns the event recorder
+func (ic GenericController) GetRecoder() record.EventRecorder {
+	return ic.recorder
+}
+
 // GetSecret searches for a secret in the local secrets Store
 func (ic GenericController) GetSecret(name string) (*api.Secret, error) {
 	s, exists, err := ic.secrLister.Store.GetByKey(name)
@@ -1104,8 +1109,9 @@ func (ic *GenericController) createServers(data []interface{},
 			}
 
 			cert := bc.(*ingress.SSLCert)
-			if !isHostValid(host, cert) {
-				glog.Warningf("ssl certificate %v does not contain a common name for host %v", key, host)
+			err = cert.Certificate.VerifyHostname(host)
+			if err != nil {
+				glog.Warningf("ssl certificate %v does not contain a Common Name or Subject Alternative Name for host %v", key, host)
 				continue
 			}
 
