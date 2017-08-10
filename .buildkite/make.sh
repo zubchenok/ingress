@@ -5,8 +5,6 @@ set -ex
 
 export REGISTRY=$(echo $PIPA_IMAGE_FULL_NAME | cut -d':' -f1)
 export TAG=$(echo $PIPA_IMAGE_FULL_NAME | cut -d':' -f2)
-export docker=docker
-export ARCH='amd64'
 
 if [[ "$#" -ne 1 ]]; then
   echo "$0 [image]"
