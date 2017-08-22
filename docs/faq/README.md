@@ -6,7 +6,7 @@ in this directory with site specific information.
 Table of Contents
 =================
 
-* [How is Ingress different from a Services?](#how-is-ingress-different-from-a-service)
+* [How is Ingress different from a Service?](#how-is-ingress-different-from-a-service)
 * [I created an Ingress and nothing happens, what now?](#i-created-an-ingress-and-nothing-happens-what-now)
 * [How do I deploy an Ingress controller?](#how-do-i-deploy-an-ingress-controller)
 * [Are Ingress controllers namespaced?](#are-ingress-controllers-namespaced)
@@ -46,7 +46,7 @@ controller by following [this](/examples/deployment) example.
 Ingress is namespaced, this means 2 Ingress objects can have the same name in 2
 namespaces, and must only point to Services in its own namespace. An admin can
 deploy an Ingress controller such that it only satisfies Ingress from a given
-namespace, but by default, controllers will watch the entire kubernetes cluster
+namespace, but by default, controllers will watch the entire Kubernetes cluster
 for unsatisfied Ingress.
 
 ## How do I disable an Ingress controller?
@@ -97,14 +97,14 @@ Yes, a non-comprehensive [catalog](/docs/catalog.md) exists.
 ## How are the Ingress controllers tested?
 
 Testing for the Ingress controllers is divided between:
-* Ingress repo: unittests and pre-submit integration tests run via travis
+* Ingress repo: unit tests and pre-submit integration tests run via travis
 * Kubernetes repo: [pre-submit e2e](https://k8s-testgrid.appspot.com/google-gce#gce&include-filter-by-regex=Loadbalancing),
   [post-merge e2e](https://k8s-testgrid.appspot.com/google-gce#gci-gce-ingress),
   [per release-branch e2e](https://k8s-testgrid.appspot.com/google-gce#gci-gce-ingress-1.5)
 
 The configuration for jenkins e2e tests are located [here](https://github.com/kubernetes/test-infra).
-The Ingress E2Es are located [here](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/ingress.go),
-each controller added to that suite must consistently pass the [conformance suite](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/ingress_utils.go#L112).
+The Ingress E2Es are located [here](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/network/ingress.go),
+each controller added to that suite must consistently pass the [conformance suite](https://github.com/kubernetes/kubernetes/blob/master/test/e2e/framework/ingress_utils.go#L129).
 
 ## An Ingress controller E2E is failing, what should I do?
 
@@ -128,7 +128,7 @@ test project. If you think the failures are related to project quota, cleanup
 leaked resources and bump up quota before debugging the leak.
 
 If the preceding identification process fails, it's likely that the Ingress api
-is broked upstream. Try to setup a [dev environment](/docs/dev/setup.md) from
+is broken upstream. Try to setup a [dev environment](/docs/dev/setup.md) from
 HEAD and create an Ingress. You should be deploying the [latest](https://github.com/kubernetes/ingress/releases)
 release image to the local cluster.
 

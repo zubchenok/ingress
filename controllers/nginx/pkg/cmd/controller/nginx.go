@@ -87,46 +87,7 @@ func newNGINXController() ingress.Controller {
 		configmap:     &api_v1.ConfigMap{},
 		isIPV6Enabled: isIPv6Enabled(),
 		resolver:      h,
-		proxy: &proxy{
-			Default: &server{
-				Hostname:      "localhost",
-				IP:            "127.0.0.1",
-				Port:          442,
-				ProxyProtocol: true,
-			},
-		},
 	}
-
-	listener, err := net.Listen("tcp", ":443")
-	if err != nil {
-		glog.Fatalf("%v", err)
-	}
-
-	proxyList := &proxyproto.Listener{Listener: listener}
-
-	// start goroutine that accepts tcp connections in port 443
-	go func() {
-		for {
-			var conn net.Conn
-			var err error
-
-			if n.isProxyProtocolEnabled {
-				// we need to wrap the listener in order to decode
-				// proxy protocol before handling the connection
-				conn, err = proxyList.Accept()
-			} else {
-				conn, err = listener.Accept()
-			}
-
-			if err != nil {
-				glog.Warningf("unexpected error accepting tcp connection: %v", err)
-				continue
-			}
-
-			glog.V(3).Infof("remote address %s to local %s", conn.RemoteAddr(), conn.LocalAddr())
-			go n.proxy.Handle(conn)
-		}
-	}()
 
 	fcgiListener, err := net.Listen("unix", fastCGISocket)
 	if err != nil {
@@ -196,6 +157,8 @@ type NGINXController struct {
 
 	// returns true if proxy protocol es enabled
 	isProxyProtocolEnabled bool
+
+	isSSLPassthroughEnabled bool
 
 	proxy *proxy
 }
@@ -320,6 +283,7 @@ func (n NGINXController) Info() *ingress.BackendInfo {
 // ConfigureFlags allow to configure more flags before the parsing of
 // command line arguments
 func (n *NGINXController) ConfigureFlags(flags *pflag.FlagSet) {
+	flags.BoolVar(&n.isSSLPassthroughEnabled, "enable-ssl-passthrough", false, `Enable SSL passthrough feature. Default is disabled`)
 }
 
 // OverrideFlags customize NGINX controller flags
@@ -337,6 +301,49 @@ func (n *NGINXController) OverrideFlags(flags *pflag.FlagSet) {
 
 	flags.Set("ingress-class", ic)
 	n.stats = newStatsCollector(wc, ic, n.binary)
+
+	if n.isSSLPassthroughEnabled {
+		glog.Info("starting TLS proxy for SSL passthrough")
+		n.proxy = &proxy{
+			Default: &server{
+				Hostname:      "localhost",
+				IP:            "127.0.0.1",
+				Port:          442,
+				ProxyProtocol: true,
+			},
+		}
+
+		listener, err := net.Listen("tcp", ":443")
+		if err != nil {
+			glog.Fatalf("%v", err)
+		}
+
+		proxyList := &proxyproto.Listener{Listener: listener}
+
+		// start goroutine that accepts tcp connections in port 443
+		go func() {
+			for {
+				var conn net.Conn
+				var err error
+
+				if n.isProxyProtocolEnabled {
+					// we need to wrap the listener in order to decode
+					// proxy protocol before handling the connection
+					conn, err = proxyList.Accept()
+				} else {
+					conn, err = listener.Accept()
+				}
+
+				if err != nil {
+					glog.Warningf("unexpected error accepting tcp connection: %v", err)
+					continue
+				}
+
+				glog.V(3).Infof("remote address %s to local %s", conn.RemoteAddr(), conn.LocalAddr())
+				go n.proxy.Handle(conn)
+			}
+		}()
+	}
 }
 
 // DefaultIngressClass just return the default ingress class
@@ -449,7 +456,9 @@ func (n *NGINXController) OnUpdate(ingressCfg ingress.Configuration) error {
 		})
 	}
 
-	n.proxy.ServerList = servers
+	if n.isSSLPassthroughEnabled {
+		n.proxy.ServerList = servers
+	}
 
 	// we need to check if the status module configuration changed
 	if cfg.EnableVtsStatus {
@@ -466,11 +475,33 @@ func (n *NGINXController) OnUpdate(ingressCfg ingress.Configuration) error {
 	// https://trac.nginx.org/nginx/ticket/631
 	var longestName int
 	var serverNameBytes int
+	redirectServers := make(map[string]string)
 	for _, srv := range ingressCfg.Servers {
 		if longestName < len(srv.Hostname) {
 			longestName = len(srv.Hostname)
 		}
 		serverNameBytes += len(srv.Hostname)
+		if srv.RedirectFromToWWW {
+			var n string
+			if strings.HasPrefix(srv.Hostname, "www.") {
+				n = strings.TrimLeft(srv.Hostname, "www.")
+			} else {
+				n = fmt.Sprintf("www.%v", srv.Hostname)
+			}
+			glog.V(3).Infof("creating redirect from %v to", srv.Hostname, n)
+			if _, ok := redirectServers[n]; !ok {
+				found := false
+				for _, esrv := range ingressCfg.Servers {
+					if esrv.Hostname == n {
+						found = true
+						break
+					}
+				}
+				if !found {
+					redirectServers[n] = srv.Hostname
+				}
+			}
+		}
 	}
 	if cfg.ServerNameHashBucketSize == 0 {
 		nameHashBucketSize := nginxHashBucketSize(longestName)
@@ -548,19 +579,21 @@ func (n *NGINXController) OnUpdate(ingressCfg ingress.Configuration) error {
 	cfg.SSLDHParam = sslDHParam
 
 	tc := config.TemplateConfig{
-		ProxySetHeaders:     setHeaders,
-		AddHeaders:          addHeaders,
-		MaxOpenFiles:        maxOpenFiles,
-		BacklogSize:         sysctlSomaxconn(),
-		Backends:            ingressCfg.Backends,
-		PassthroughBackends: ingressCfg.PassthroughBackends,
-		Servers:             ingressCfg.Servers,
-		TCPBackends:         ingressCfg.TCPEndpoints,
-		UDPBackends:         ingressCfg.UDPEndpoints,
-		HealthzURI:          ngxHealthPath,
-		CustomErrors:        len(cfg.CustomHTTPErrors) > 0,
-		Cfg:                 cfg,
-		IsIPV6Enabled:       n.isIPV6Enabled && !cfg.DisableIpv6,
+		ProxySetHeaders:         setHeaders,
+		AddHeaders:              addHeaders,
+		MaxOpenFiles:            maxOpenFiles,
+		BacklogSize:             sysctlSomaxconn(),
+		Backends:                ingressCfg.Backends,
+		PassthroughBackends:     ingressCfg.PassthroughBackends,
+		Servers:                 ingressCfg.Servers,
+		TCPBackends:             ingressCfg.TCPEndpoints,
+		UDPBackends:             ingressCfg.UDPEndpoints,
+		HealthzURI:              ngxHealthPath,
+		CustomErrors:            len(cfg.CustomHTTPErrors) > 0,
+		Cfg:                     cfg,
+		IsIPV6Enabled:           n.isIPV6Enabled && !cfg.DisableIpv6,
+		RedirectServers:         redirectServers,
+		IsSSLPassthroughEnabled: n.isSSLPassthroughEnabled,
 	}
 
 	// We need to extract the endpoints to be used in the fastcgi error handler

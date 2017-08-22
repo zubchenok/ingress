@@ -19,6 +19,7 @@ package controller
 import (
 	"github.com/golang/glog"
 	extensions "k8s.io/api/extensions/v1beta1"
+	"k8s.io/ingress/core/pkg/ingress/annotations/alias"
 	"k8s.io/ingress/core/pkg/ingress/annotations/auth"
 	"k8s.io/ingress/core/pkg/ingress/annotations/authreq"
 	"k8s.io/ingress/core/pkg/ingress/annotations/authtls"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/ingress/core/pkg/ingress/annotations/portinredirect"
 	"k8s.io/ingress/core/pkg/ingress/annotations/proxy"
 	"k8s.io/ingress/core/pkg/ingress/annotations/ratelimit"
+	"k8s.io/ingress/core/pkg/ingress/annotations/redirect"
 	"k8s.io/ingress/core/pkg/ingress/annotations/rewrite"
 	"k8s.io/ingress/core/pkg/ingress/annotations/secureupstream"
 	"k8s.io/ingress/core/pkg/ingress/annotations/serviceupstream"
@@ -37,6 +39,7 @@ import (
 	"k8s.io/ingress/core/pkg/ingress/annotations/sslpassthrough"
 	"k8s.io/ingress/core/pkg/ingress/errors"
 	"k8s.io/ingress/core/pkg/ingress/resolver"
+	"k8s.io/ingress/core/pkg/ingress/annotations/clientbodybuffersize"
 )
 
 type extractorConfig interface {
@@ -63,12 +66,15 @@ func newAnnotationExtractor(cfg extractorConfig) annotationExtractor {
 			"UsePortInRedirects":   portinredirect.NewParser(cfg),
 			"Proxy":                proxy.NewParser(cfg),
 			"RateLimit":            ratelimit.NewParser(cfg),
-			"Redirect":             rewrite.NewParser(cfg),
+			"Redirect":             redirect.NewParser(),
+			"Rewrite":              rewrite.NewParser(cfg),
 			"SecureUpstream":       secureupstream.NewParser(cfg),
 			"ServiceUpstream":      serviceupstream.NewParser(),
 			"SessionAffinity":      sessionaffinity.NewParser(),
 			"SSLPassthrough":       sslpassthrough.NewParser(),
 			"ConfigurationSnippet": snippet.NewParser(),
+			"Alias":                alias.NewParser(),
+			"ClientBodyBufferSize": clientbodybuffersize.NewParser(),
 		},
 	}
 }
@@ -102,11 +108,13 @@ func (e *annotationExtractor) Extract(ing *extensions.Ingress) map[string]interf
 }
 
 const (
-	secureUpstream  = "SecureUpstream"
-	healthCheck     = "HealthCheck"
-	sslPassthrough  = "SSLPassthrough"
-	sessionAffinity = "SessionAffinity"
-	serviceUpstream = "ServiceUpstream"
+	secureUpstream       = "SecureUpstream"
+	healthCheck          = "HealthCheck"
+	sslPassthrough       = "SSLPassthrough"
+	sessionAffinity      = "SessionAffinity"
+	serviceUpstream      = "ServiceUpstream"
+	serverAlias          = "Alias"
+	clientBodyBufferSize = "ClientBodyBufferSize"
 )
 
 func (e *annotationExtractor) ServiceUpstream(ing *extensions.Ingress) bool {
@@ -131,6 +139,16 @@ func (e *annotationExtractor) HealthCheck(ing *extensions.Ingress) *healthcheck.
 func (e *annotationExtractor) SSLPassthrough(ing *extensions.Ingress) bool {
 	val, _ := e.annotations[sslPassthrough].Parse(ing)
 	return val.(bool)
+}
+
+func (e *annotationExtractor) Alias(ing *extensions.Ingress) string {
+	val, _ := e.annotations[serverAlias].Parse(ing)
+	return val.(string)
+}
+
+func (e *annotationExtractor) ClientBodyBufferSize(ing *extensions.Ingress) string {
+	val, _ := e.annotations[clientBodyBufferSize].Parse(ing)
+	return val.(string)
 }
 
 func (e *annotationExtractor) SessionAffinity(ing *extensions.Ingress) *sessionaffinity.AffinityConfig {

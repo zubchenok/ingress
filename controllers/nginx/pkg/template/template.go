@@ -22,16 +22,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	text_template "text/template"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/golang/glog"
-
 	"github.com/pborman/uuid"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/ingress/controllers/nginx/pkg/config"
 	"k8s.io/ingress/core/pkg/ingress"
 	ing_net "k8s.io/ingress/core/pkg/net"
@@ -132,6 +132,7 @@ var (
 		"buildAuthLocation":        buildAuthLocation,
 		"buildAuthResponseHeaders": buildAuthResponseHeaders,
 		"buildProxyPass":           buildProxyPass,
+		"buildWhitelistVariable":   buildWhitelistVariable,
 		"buildRateLimitZones":      buildRateLimitZones,
 		"buildRateLimit":           buildRateLimit,
 		"buildResolvers":           buildResolvers,
@@ -147,6 +148,10 @@ var (
 		"toLower":                  strings.ToLower,
 		"formatIP":                 formatIP,
 		"buildNextUpstream":        buildNextUpstream,
+		"serverConfig": func(all config.TemplateConfig, server *ingress.Server) interface{} {
+			return struct{ First, Second interface{} }{all, server}
+		},
+		"buildAuthSignURL": buildAuthSignURL,
 	}
 )
 
@@ -194,7 +199,7 @@ func buildLocation(input interface{}) string {
 	}
 
 	path := location.Path
-	if len(location.Redirect.Target) > 0 && location.Redirect.Target != path {
+	if len(location.Rewrite.Target) > 0 && location.Rewrite.Target != path {
 		if path == slash {
 			return fmt.Sprintf("~* %s", path)
 		}
@@ -249,7 +254,7 @@ func buildAuthResponseHeaders(input interface{}) []string {
 func buildLogFormatUpstream(input interface{}) string {
 	cfg, ok := input.(config.Configuration)
 	if !ok {
-		glog.Errorf("error  an ingress.buildLogFormatUpstream type but %T was returned", input)
+		glog.Errorf("error an ingress.buildLogFormatUpstream type but %T was returned", input)
 	}
 
 	return cfg.BuildLogFormatUpstream()
@@ -287,7 +292,7 @@ func buildProxyPass(host string, b interface{}, loc interface{}) string {
 	// defProxyPass returns the default proxy_pass, just the name of the upstream
 	defProxyPass := fmt.Sprintf("proxy_pass %s://%s;", proto, upstreamName)
 	// if the path in the ingress rule is equals to the target: no special rewrite
-	if path == location.Redirect.Target {
+	if path == location.Rewrite.Target {
 		return defProxyPass
 	}
 
@@ -295,17 +300,23 @@ func buildProxyPass(host string, b interface{}, loc interface{}) string {
 		path = fmt.Sprintf("%s/", path)
 	}
 
-	if len(location.Redirect.Target) > 0 {
+	if len(location.Rewrite.Target) > 0 {
 		abu := ""
-		if location.Redirect.AddBaseURL {
+		if location.Rewrite.AddBaseURL {
 			// path has a slash suffix, so that it can be connected with baseuri directly
 			bPath := fmt.Sprintf("%s%s", path, "$baseuri")
-			abu = fmt.Sprintf(`subs_filter '<head(.*)>' '<head$1><base href="$scheme://$http_host%v">' r;
+			if len(location.Rewrite.BaseURLScheme) > 0 {
+				abu = fmt.Sprintf(`subs_filter '<head(.*)>' '<head$1><base href="%v://$http_host%v">' r;
+	subs_filter '<HEAD(.*)>' '<HEAD$1><base href="%v://$http_host%v">' r;
+	`, location.Rewrite.BaseURLScheme, bPath, location.Rewrite.BaseURLScheme, bPath)
+			} else {
+				abu = fmt.Sprintf(`subs_filter '<head(.*)>' '<head$1><base href="$scheme://$http_host%v">' r;
 	subs_filter '<HEAD(.*)>' '<HEAD$1><base href="$scheme://$http_host%v">' r;
 	`, bPath, bPath)
+			}
 		}
 
-		if location.Redirect.Target == slash {
+		if location.Rewrite.Target == slash {
 			// special case redirect to /
 			// ie /something to /
 			return fmt.Sprintf(`
@@ -318,17 +329,30 @@ func buildProxyPass(host string, b interface{}, loc interface{}) string {
 		return fmt.Sprintf(`
 	rewrite %s(.*) %s/$1 break;
 	proxy_pass %s://%s;
-	%v`, path, location.Redirect.Target, proto, upstreamName, abu)
+	%v`, path, location.Rewrite.Target, proto, upstreamName, abu)
 	}
 
 	// default proxy_pass
 	return defProxyPass
 }
 
+var (
+	whitelistVarMap = map[string]string{}
+)
+
+func buildWhitelistVariable(s string) string {
+	if _, ok := whitelistVarMap[s]; !ok {
+		str := base64.URLEncoding.EncodeToString([]byte(s))
+		whitelistVarMap[s] = strings.Replace(str, "=", "", -1)
+	}
+
+	return whitelistVarMap[s]
+}
+
 // buildRateLimitZones produces an array of limit_conn_zone in order to allow
 // rate limiting of request. Each Ingress rule could have up to two zones, one
 // for connection limit by IP address and other for limiting request per second
-func buildRateLimitZones(variable string, input interface{}) []string {
+func buildRateLimitZones(input interface{}) []string {
 	zones := sets.String{}
 
 	servers, ok := input.([]*ingress.Server)
@@ -339,9 +363,11 @@ func buildRateLimitZones(variable string, input interface{}) []string {
 	for _, server := range servers {
 		for _, loc := range server.Locations {
 
+			whitelistVar := buildWhitelistVariable(loc.RateLimit.Name)
+
 			if loc.RateLimit.Connections.Limit > 0 {
-				zone := fmt.Sprintf("limit_conn_zone %v zone=%v:%vm;",
-					variable,
+				zone := fmt.Sprintf("limit_conn_zone $%s_limit zone=%v:%vm;",
+					whitelistVar,
 					loc.RateLimit.Connections.Name,
 					loc.RateLimit.Connections.SharedSize)
 				if !zones.Has(zone) {
@@ -350,8 +376,8 @@ func buildRateLimitZones(variable string, input interface{}) []string {
 			}
 
 			if loc.RateLimit.RPM.Limit > 0 {
-				zone := fmt.Sprintf("limit_req_zone %v zone=%v:%vm rate=%vr/m;",
-					variable,
+				zone := fmt.Sprintf("limit_req_zone $%s_limit zone=%v:%vm rate=%vr/m;",
+					whitelistVar,
 					loc.RateLimit.RPM.Name,
 					loc.RateLimit.RPM.SharedSize,
 					loc.RateLimit.RPM.Limit)
@@ -361,8 +387,8 @@ func buildRateLimitZones(variable string, input interface{}) []string {
 			}
 
 			if loc.RateLimit.RPS.Limit > 0 {
-				zone := fmt.Sprintf("limit_req_zone %v zone=%v:%vm rate=%vr/s;",
-					variable,
+				zone := fmt.Sprintf("limit_req_zone $%s_limit zone=%v:%vm rate=%vr/s;",
+					whitelistVar,
 					loc.RateLimit.RPS.Name,
 					loc.RateLimit.RPS.SharedSize,
 					loc.RateLimit.RPS.Limit)
@@ -499,4 +525,19 @@ func buildNextUpstream(input interface{}) string {
 	}
 
 	return strings.Join(nextUpstreamCodes, " ")
+}
+
+func buildAuthSignURL(input interface{}) string {
+	s, ok := input.(string)
+	if !ok {
+		glog.Errorf("expected an string type but %T was returned", input)
+	}
+
+	u, _ := url.Parse(s)
+	q := u.Query()
+	if len(q) == 0 {
+		return fmt.Sprintf("%v?rd=$request_uri", s)
+	}
+
+	return fmt.Sprintf("%v&rd=$request_uri", s)
 }

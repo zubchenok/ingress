@@ -610,6 +610,18 @@ func (ic *GenericController) getBackendServers() ([]*ingress.Backend, []*ingress
 	upstreams := ic.createUpstreams(ings)
 	servers := ic.createServers(ings, upstreams)
 
+	// If a server has a hostname equivalent to a pre-existing alias, then we
+	// remove the alias to avoid conflicts.
+	for _, server := range servers {
+		for j, alias := range servers {
+			if server.Hostname == alias.Alias {
+				glog.Warningf("There is a conflict with server hostname '%v' and alias '%v' (in server %v). Removing alias to avoid conflicts.",
+					server.Hostname, alias.Hostname, alias.Hostname)
+				servers[j].Alias = ""
+			}
+		}
+	}
+
 	for _, ingIf := range ings {
 		ing := ingIf.(*extensions.Ingress)
 
@@ -620,6 +632,9 @@ func (ic *GenericController) getBackendServers() ([]*ingress.Backend, []*ingress
 		}
 
 		anns := ic.annotations.Extract(ing)
+
+		// setup client-buffer-body-size based on annotations
+		clientBufferBodySizeAnnotation := ic.annotations.ClientBodyBufferSize(ing)
 
 		for _, rule := range ing.Spec.Rules {
 			host := rule.Host
@@ -668,20 +683,28 @@ func (ic *GenericController) getBackendServers() ([]*ingress.Backend, []*ingress
 						loc.Port = ups.Port
 						loc.Service = ups.Service
 						mergeLocationAnnotations(loc, anns)
+						if loc.Redirect.FromToWWW {
+							server.RedirectFromToWWW = true
+						}
 						break
 					}
+					loc.ClientBodyBufferSize = clientBufferBodySizeAnnotation
 				}
 				// is a new location
 				if addLoc {
 					glog.V(3).Infof("adding location %v in ingress rule %v/%v upstream %v", nginxPath, ing.Namespace, ing.Name, ups.Name)
 					loc := &ingress.Location{
-						Path:         nginxPath,
-						Backend:      ups.Name,
-						IsDefBackend: false,
-						Service:      ups.Service,
-						Port:         ups.Port,
+						Path:                 nginxPath,
+						Backend:              ups.Name,
+						IsDefBackend:         false,
+						Service:              ups.Service,
+						Port:                 ups.Port,
+						ClientBodyBufferSize: clientBufferBodySizeAnnotation,
 					}
 					mergeLocationAnnotations(loc, anns)
+					if loc.Redirect.FromToWWW {
+						server.RedirectFromToWWW = true
+					}
 					server.Locations = append(server.Locations, loc)
 				}
 
@@ -1042,6 +1065,9 @@ func (ic *GenericController) createServers(data []interface{},
 			}
 		}
 
+		// setup client-buffer-body-size based on annotations
+		clientBufferBodySizeAnnotation := ic.annotations.ClientBodyBufferSize(ing)
+
 		for _, rule := range ing.Spec.Rules {
 			host := rule.Host
 			if host == "" {
@@ -1056,28 +1082,35 @@ func (ic *GenericController) createServers(data []interface{},
 				Hostname: host,
 				Locations: []*ingress.Location{
 					{
-						Path:         rootLocation,
-						IsDefBackend: true,
-						Backend:      un,
-						Proxy:        ngxProxy,
-						Service:      &api.Service{},
+						Path:                 rootLocation,
+						IsDefBackend:         true,
+						Backend:              un,
+						Proxy:                ngxProxy,
+						Service:              &api.Service{},
+						ClientBodyBufferSize: clientBufferBodySizeAnnotation,
 					},
 				}, SSLPassthrough: sslpt}
 		}
 	}
 
-	// configure default location and SSL
+	// configure default location, alias, and SSL
 	for _, ingIf := range data {
 		ing := ingIf.(*extensions.Ingress)
 		if !class.IsValid(ing, ic.cfg.IngressClass, ic.cfg.DefaultIngressClass) {
 			continue
 		}
 
+		// setup server-alias based on annotations
+		aliasAnnotation := ic.annotations.Alias(ing)
+
 		for _, rule := range ing.Spec.Rules {
 			host := rule.Host
 			if host == "" {
 				host = defServerName
 			}
+
+			// setup server aliases
+			servers[host].Alias = aliasAnnotation
 
 			// only add a certificate if the server does not have one previously configured
 			if len(ing.Spec.TLS) == 0 || servers[host].SSLCertificate != "" {
@@ -1272,6 +1305,14 @@ func (ic GenericController) Start() {
 		ic.nodeController.HasSynced,
 	) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+	}
+
+	// initial sync of secrets to avoid unnecessary reloads
+	for _, key := range ic.ingLister.ListKeys() {
+		if obj, exists, _ := ic.ingLister.GetByKey(key); exists {
+			ing := obj.(*extensions.Ingress)
+			ic.readSecrets(ing)
+		}
 	}
 
 	go ic.syncQueue.Run(time.Second, ic.stopCh)
