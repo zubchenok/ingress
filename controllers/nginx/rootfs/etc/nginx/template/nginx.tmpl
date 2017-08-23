@@ -145,15 +145,17 @@ http {
        ''                $server_port;
     }
 
-    map $pass_access_scheme $the_x_forwarded_for {
-        default           $remote_addr;
-        https             $proxy_protocol_addr;
-    }
-
-    map $pass_access_scheme $the_real_ip {
-        default           $remote_addr;
-        https             $proxy_protocol_addr;
-    }
+    {{ if $cfg.UseProxyProtocol }}
+        map $http_x_forwarded_for $the_real_ip {
+            default          $http_x_forwarded_for;
+            ''               $proxy_protocol_addr;
+        }
+    {{ else }}
+        map $http_x_forwarded_for $the_real_ip {
+            default          $http_x_forwarded_for;
+            ''               $realip_remote_addr;
+        }
+    {{ end }}
 
     {{ if $all.IsSSLPassthroughEnabled }}
     # map port 442 to 443 for header X-Forwarded-Port
