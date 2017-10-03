@@ -23,6 +23,7 @@ import (
 	"k8s.io/ingress/core/pkg/ingress/annotations/auth"
 	"k8s.io/ingress/core/pkg/ingress/annotations/authreq"
 	"k8s.io/ingress/core/pkg/ingress/annotations/authtls"
+	"k8s.io/ingress/core/pkg/ingress/annotations/clientbodybuffersize"
 	"k8s.io/ingress/core/pkg/ingress/annotations/cors"
 	"k8s.io/ingress/core/pkg/ingress/annotations/healthcheck"
 	"k8s.io/ingress/core/pkg/ingress/annotations/ipwhitelist"
@@ -37,9 +38,9 @@ import (
 	"k8s.io/ingress/core/pkg/ingress/annotations/sessionaffinity"
 	"k8s.io/ingress/core/pkg/ingress/annotations/snippet"
 	"k8s.io/ingress/core/pkg/ingress/annotations/sslpassthrough"
+	"k8s.io/ingress/core/pkg/ingress/annotations/upstreamhashby"
 	"k8s.io/ingress/core/pkg/ingress/errors"
 	"k8s.io/ingress/core/pkg/ingress/resolver"
-	"k8s.io/ingress/core/pkg/ingress/annotations/clientbodybuffersize"
 )
 
 type extractorConfig interface {
@@ -73,6 +74,7 @@ func newAnnotationExtractor(cfg extractorConfig) annotationExtractor {
 			"SessionAffinity":      sessionaffinity.NewParser(),
 			"SSLPassthrough":       sslpassthrough.NewParser(),
 			"ConfigurationSnippet": snippet.NewParser(),
+			"UpstreamHashBy":       upstreamhashby.NewParser(),
 			"Alias":                alias.NewParser(),
 			"ClientBodyBufferSize": clientbodybuffersize.NewParser(),
 		},
@@ -115,6 +117,7 @@ const (
 	serviceUpstream      = "ServiceUpstream"
 	serverAlias          = "Alias"
 	clientBodyBufferSize = "ClientBodyBufferSize"
+	upstreamHashBy       = "UpstreamHashBy"
 )
 
 func (e *annotationExtractor) ServiceUpstream(ing *extensions.Ingress) bool {
@@ -154,4 +157,9 @@ func (e *annotationExtractor) ClientBodyBufferSize(ing *extensions.Ingress) stri
 func (e *annotationExtractor) SessionAffinity(ing *extensions.Ingress) *sessionaffinity.AffinityConfig {
 	val, _ := e.annotations[sessionAffinity].Parse(ing)
 	return val.(*sessionaffinity.AffinityConfig)
+}
+
+func (e *annotationExtractor) UpstreamHashBy(ing *extensions.Ingress) string {
+	val, _ := e.annotations[upstreamHashBy].Parse(ing)
+	return val.(string)
 }
