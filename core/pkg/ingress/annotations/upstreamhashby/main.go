@@ -31,7 +31,7 @@ type upstreamhashby struct {
 
 // NewParser creates a new CORS annotation parser
 func NewParser() parser.IngressAnnotation {
-	return annotation{}
+	return upstreamhashby{}
 }
 
 // Parse parses the annotations contained in the ingress rule
