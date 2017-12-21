@@ -1,0 +1,6 @@
+steps:
+  - name: ':rocket: Build and push image'
+    command: ${PIPA_PIPELINES_DIR}/multi-image/run.sh ./ ./
+    timeout_in_minutes: 90
+    agents:
+      queue: ${BUILDKITE_AGENT_META_DATA_QUEUE}
