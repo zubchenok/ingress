@@ -20,7 +20,7 @@ import (
 	"k8s.io/api/core/v1"
 	apiserverserviceaccount "k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/kubernetes/pkg/api"
+	api "k8s.io/kubernetes/pkg/apis/core"
 )
 
 // UserInfo returns a user.Info interface for the given namespace, service account name and UID
@@ -28,7 +28,7 @@ func UserInfo(namespace, name, uid string) user.Info {
 	return &user.DefaultInfo{
 		Name:   apiserverserviceaccount.MakeUsername(namespace, name),
 		UID:    uid,
-		Groups: apiserverserviceaccount.MakeGroupNames(namespace, name),
+		Groups: apiserverserviceaccount.MakeGroupNames(namespace),
 	}
 }
 
