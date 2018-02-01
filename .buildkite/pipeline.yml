@@ -1,0 +1,5 @@
+- name: ':docker: Build nginx-ingress-controller Container'
+  command: pipa build -x --push -- ./build.sh $PIPA_IMAGE_FULL_NAME
+  timeout_in_minutes: 20
+  agents:
+    queue: ${BUILDKITE_AGENT_META_DATA_QUEUE}
