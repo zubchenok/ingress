@@ -73,7 +73,8 @@ type Configuration struct {
 	DefaultSSLCertificate string
 
 	// optional
-	PublishService string
+	PublishService       string
+	PublishStatusAddress string
 
 	UpdateStatus           bool
 	UseNodeInternalIP      bool
@@ -369,12 +370,14 @@ func (n *NGINXController) getBackendServers(ingresses []*extensions.Ingress) ([]
 				continue
 			}
 
+			if server.AuthTLSError == "" && anns.CertificateAuth.AuthTLSError != "" {
+				server.AuthTLSError = anns.CertificateAuth.AuthTLSError
+			}
+
 			if server.CertificateAuth.CAFileName == "" {
-				server.CertificateAuth = anns.CertificateAuth
 				// It is possible that no CAFileName is found in the secret
 				if server.CertificateAuth.CAFileName == "" {
 					glog.V(3).Infof("secret %v does not contain 'ca.crt', mutual authentication not enabled - ingress rule %v/%v.", server.CertificateAuth.Secret, ing.Namespace, ing.Name)
-
 				}
 			} else {
 				glog.V(3).Infof("server %v already contains a mutual authentication configuration - ingress rule %v/%v", server.Hostname, ing.Namespace, ing.Name)
@@ -427,6 +430,7 @@ func (n *NGINXController) getBackendServers(ingresses []*extensions.Ingress) ([]
 						loc.XForwardedPrefix = anns.XForwardedPrefix
 						loc.UsePortInRedirects = anns.UsePortInRedirects
 						loc.Connection = anns.Connection
+						loc.Logs = anns.Logs
 
 						if loc.Redirect.FromToWWW {
 							server.RedirectFromToWWW = true
@@ -460,6 +464,7 @@ func (n *NGINXController) getBackendServers(ingresses []*extensions.Ingress) ([]
 						XForwardedPrefix:     anns.XForwardedPrefix,
 						UsePortInRedirects:   anns.UsePortInRedirects,
 						Connection:           anns.Connection,
+						Logs:                 anns.Logs,
 					}
 
 					if loc.Redirect.FromToWWW {

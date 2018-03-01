@@ -11,17 +11,7 @@
 load_module /etc/nginx/modules/ngx_http_modsecurity_module.so;
 {{ end }}
 
-{{ if $cfg.EnableOpentracing }}
-load_module /etc/nginx/modules/ngx_http_opentracing_module.so;
-{{ end }}
-
-{{ if (and $cfg.EnableOpentracing (ne $cfg.ZipkinCollectorHost "")) }}
-load_module /etc/nginx/modules/ngx_http_zipkin_module.so;
-{{ end }}
-
-{{ if (and $cfg.EnableOpentracing (ne $cfg.JaegerCollectorHost "")) }}
-load_module /etc/nginx/modules/ngx_http_jaeger_module.so;
-{{ end }}
+{{ buildOpentracingLoad $cfg }}
 
 daemon off;
 
@@ -57,8 +47,9 @@ http {
     {{/* databases used to determine the country depending on the client IP address */}}
     {{/* http://nginx.org/en/docs/http/ngx_http_geoip_module.html */}}
     {{/* this is require to calculate traffic for individual country using GeoIP in the status page */}}
-    geoip_country       /etc/nginx/GeoIP.dat;
-    geoip_city          /etc/nginx/GeoLiteCity.dat;
+    geoip_country       /etc/nginx/geoip/GeoIP.dat;
+    geoip_city          /etc/nginx/geoip/GeoLiteCity.dat;
+    geoip_org           /etc/nginx/geoip/GeoIPASNum.dat;
     geoip_proxy_recursive on;
 
     {{ if $cfg.EnableVtsStatus }}
@@ -107,17 +98,8 @@ http {
     {{ if $cfg.EnableOpentracing }}
     opentracing on;
     {{ end }}
-
-    {{ if (and $cfg.EnableOpentracing (ne $cfg.ZipkinCollectorHost "")) }}
-    zipkin_collector_host                   {{ $cfg.ZipkinCollectorHost }};
-    zipkin_collector_port                   {{ $cfg.ZipkinCollectorPort }};
-    zipkin_service_name                     {{ $cfg.ZipkinServiceName }};
-    {{ else if (and $cfg.EnableOpentracing (ne $cfg.JaegerCollectorHost "")) }}
-    jaeger_reporter_local_agent_host_port   {{ $cfg.JaegerCollectorHost }}:{{ $cfg.JaegerCollectorPort }};
-    jaeger_service_name                     {{ $cfg.JaegerServiceName }};
-    jaeger_sampler_type                     {{ $cfg.JaegerSamplerType }};
-    jaeger_sampler_param                    {{ $cfg.JaegerSamplerParam }};
-    {{ end }}
+    
+    {{ buildOpentracing $cfg }}
 
     include /etc/nginx/mime.types;
     default_type text/html;
@@ -168,11 +150,20 @@ http {
     {{ if $cfg.DisableAccessLog }}
     access_log off;
     {{ else }}
+    {{ if $cfg.EnableSyslog }}
+    access_log syslog:server={{ $cfg.SyslogHost }}:{{ $cfg.SyslogPort }} upstreaminfo if=$loggable;
+    {{ else }}
     access_log {{ $cfg.AccessLogPath }} upstreaminfo if=$loggable;
     {{ end }}
-    error_log  {{ $cfg.ErrorLogPath }} {{ $cfg.ErrorLogLevel }};
+    {{ end }}
 
-    {{ buildResolvers $cfg.Resolver }}
+    {{ if $cfg.EnableSyslog }}
+    error_log syslog:server={{ $cfg.SyslogHost }}:{{ $cfg.SyslogPort }} {{ $cfg.ErrorLogLevel }};
+    {{ else }}
+    error_log  {{ $cfg.ErrorLogPath }} {{ $cfg.ErrorLogLevel }};
+    {{ end }}
+
+    {{ buildResolvers $cfg.Resolver $cfg.DisableIpv6DNS }}
 
     {{/* Whenever nginx proxies a request without a "Connection" header, the "Connection" header is set to "close" */}}
     {{/* when making the target request.  This means that you cannot simply use */}}
@@ -570,20 +561,20 @@ stream {
      {{ $cors := .CorsConfig }}
      # Cors Preflight methods needs additional options and different Return Code
      if ($request_method = 'OPTIONS') {
-        add_header 'Access-Control-Allow-Origin' '{{ $cors.CorsAllowOrigin }}' always;
-        {{ if $cors.CorsAllowCredentials }} add_header 'Access-Control-Allow-Credentials' '{{ $cors.CorsAllowCredentials }}' always; {{ end }}
-        add_header 'Access-Control-Allow-Methods' '{{ $cors.CorsAllowMethods }}' always;
-        add_header 'Access-Control-Allow-Headers' '{{ $cors.CorsAllowHeaders }}' always;
-        add_header 'Access-Control-Max-Age' {{ $cors.CorsMaxAge }};
-        add_header 'Content-Type' 'text/plain charset=UTF-8';
-        add_header 'Content-Length' 0;
+        more_set_headers 'Access-Control-Allow-Origin: {{ $cors.CorsAllowOrigin }}';
+        {{ if $cors.CorsAllowCredentials }} more_set_headers 'Access-Control-Allow-Credentials: {{ $cors.CorsAllowCredentials }}'; {{ end }}
+        more_set_headers 'Access-Control-Allow-Methods: {{ $cors.CorsAllowMethods }}';
+        more_set_headers 'Access-Control-Allow-Headers: {{ $cors.CorsAllowHeaders }}';
+        more_set_headers 'Access-Control-Max-Age: {{ $cors.CorsMaxAge }}';
+        more_set_headers 'Content-Type: text/plain charset=UTF-8';
+        more_set_headers 'Content-Length: 0';
         return 204;
      }
 
-        add_header 'Access-Control-Allow-Origin' '{{ $cors.CorsAllowOrigin }}' always;
-        {{ if $cors.CorsAllowCredentials }} add_header 'Access-Control-Allow-Credentials' '{{ $cors.CorsAllowCredentials }}' always; {{ end }}
-        add_header 'Access-Control-Allow-Methods' '{{ $cors.CorsAllowMethods }}' always;
-        add_header 'Access-Control-Allow-Headers' '{{ $cors.CorsAllowHeaders }}' always;
+        more_set_headers 'Access-Control-Allow-Origin: {{ $cors.CorsAllowOrigin }}';
+        {{ if $cors.CorsAllowCredentials }} more_set_headers 'Access-Control-Allow-Credentials: {{ $cors.CorsAllowCredentials }}'; {{ end }}
+        more_set_headers 'Access-Control-Allow-Methods: {{ $cors.CorsAllowMethods }}';
+        more_set_headers 'Access-Control-Allow-Headers: {{ $cors.CorsAllowHeaders }}';
 
 {{ end }}
 
@@ -631,9 +622,10 @@ stream {
         {{ end }}
         {{ end }}
 
-        {{ if (and (not (empty $server.SSLCertificate)) $all.Cfg.HSTS) }}
-        more_set_headers                        "Strict-Transport-Security: max-age={{ $all.Cfg.HSTSMaxAge }}{{ if $all.Cfg.HSTSIncludeSubdomains }}; includeSubDomains{{ end }};{{ if $all.Cfg.HSTSPreload }} preload{{ end }}";
-        {{ end }}
+        {{ if not (empty $server.AuthTLSError) }}
+        # {{ $server.AuthTLSError }}
+        return 403;
+        {{ else }}
 
         {{ if not (empty $server.CertificateAuth.CAFileName) }}
         # PEM sha: {{ $server.CertificateAuth.PemSHA }}
@@ -702,6 +694,17 @@ stream {
         {{ end }}
 
         location {{ $path }} {
+            {{ if (and (not (empty $server.SSLCertificate)) $all.Cfg.HSTS) }}
+            if ($scheme = https) {
+            more_set_headers                        "Strict-Transport-Security: max-age={{ $all.Cfg.HSTSMaxAge }}{{ if $all.Cfg.HSTSIncludeSubdomains }}; includeSubDomains{{ end }};{{ if $all.Cfg.HSTSPreload }} preload{{ end }}";
+            }
+            {{ end }}
+
+
+            {{ if not $location.Logs.Access }}
+            access_log off;
+            {{ end }}
+
             port_in_redirect {{ if $location.UsePortInRedirects }}on{{ else }}off{{ end }};
 
             {{ if $all.Cfg.EnableVtsStatus }}{{ if $location.VtsFilterKey }} vhost_traffic_status_filter_by_set_key {{ $location.VtsFilterKey }};{{ end }}{{ end }}
@@ -900,7 +903,7 @@ stream {
             return 503;
             {{ end }}
         }
-
+        {{ end }}
         {{ end }}
 
         {{ if eq $server.Hostname "_" }}

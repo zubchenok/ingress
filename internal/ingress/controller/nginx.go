@@ -33,6 +33,7 @@ import (
 	"github.com/golang/glog"
 
 	proxyproto "github.com/armon/go-proxyproto"
+	"github.com/eapache/channels"
 	apiv1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -40,6 +41,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/util/filesystem"
+
+	"path/filepath"
 
 	"k8s.io/ingress-nginx/internal/file"
 	"k8s.io/ingress-nginx/internal/ingress"
@@ -68,6 +71,7 @@ const (
 
 var (
 	tmplPath    = "/etc/nginx/template/nginx.tmpl"
+	geoipPath   = "/etc/nginx/geoip"
 	cfgPath     = "/etc/nginx/nginx.conf"
 	nginxBinary = "/usr/sbin/nginx"
 )
@@ -106,7 +110,7 @@ func NewNGINXController(config *Configuration, fs file.Filesystem) *NGINXControl
 		}),
 
 		stopCh:   make(chan struct{}),
-		updateCh: make(chan store.Event, 1024),
+		updateCh: channels.NewRingChannel(1024),
 
 		stopLock: &sync.Mutex{},
 
@@ -140,6 +144,7 @@ func NewNGINXController(config *Configuration, fs file.Filesystem) *NGINXControl
 		n.syncStatus = status.NewStatusSyncer(status.Config{
 			Client:                 config.Client,
 			PublishService:         config.PublishService,
+			PublishStatusAddress:   config.PublishStatusAddress,
 			IngressLister:          n.store,
 			ElectionID:             config.ElectionID,
 			IngressClass:           class.IngressClass,
@@ -151,8 +156,8 @@ func NewNGINXController(config *Configuration, fs file.Filesystem) *NGINXControl
 		glog.Warning("Update of ingress status is disabled (flag --update-status=false was specified)")
 	}
 
-	var onChange func()
-	onChange = func() {
+	var onTemplateChange func()
+	onTemplateChange = func() {
 		template, err := ngx_template.NewTemplate(tmplPath, fs)
 		if err != nil {
 			// this error is different from the rest because it must be clear why nginx is not working
@@ -178,12 +183,42 @@ Error loading new template : %v
 
 	// TODO: refactor
 	if _, ok := fs.(filesystem.DefaultFs); !ok {
-		watch.NewDummyFileWatcher(tmplPath, onChange)
+		watch.NewDummyFileWatcher(tmplPath, onTemplateChange)
 	} else {
-		_, err = watch.NewFileWatcher(tmplPath, onChange)
+
+		_, err = watch.NewFileWatcher(tmplPath, onTemplateChange)
 		if err != nil {
-			glog.Fatalf("unexpected error watching template %v: %v", tmplPath, err)
+			glog.Fatalf("unexpected error creating file watcher: %v", err)
 		}
+
+		filesToWatch := []string{}
+		err := filepath.Walk("/etc/nginx/geoip/", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			filesToWatch = append(filesToWatch, path)
+			return nil
+		})
+
+		if err != nil {
+			glog.Fatalf("unexpected error creating file watcher: %v", err)
+		}
+
+		for _, f := range filesToWatch {
+			_, err = watch.NewFileWatcher(f, func() {
+				glog.Info("file %v changed. Reloading NGINX", f)
+				n.SetForceReload(true)
+			})
+			if err != nil {
+				glog.Fatalf("unexpected error creating file watcher: %v", err)
+			}
+		}
+
 	}
 
 	return n
@@ -209,7 +244,7 @@ type NGINXController struct {
 	stopLock *sync.Mutex
 
 	stopCh   chan struct{}
-	updateCh chan store.Event
+	updateCh *channels.RingChannel
 
 	// ngxErrCh channel used to detect errors with the nginx processes
 	ngxErrCh chan error
@@ -290,16 +325,20 @@ func (n *NGINXController) Start() {
 				// start a new nginx master process if the controller is not being stopped
 				n.start(cmd)
 			}
-		case evt := <-n.updateCh:
+		case event := <-n.updateCh.Out():
 			if n.isShuttingDown {
 				break
 			}
-			glog.V(3).Infof("Event %v received - object %v", evt.Type, evt.Obj)
-			if evt.Type == store.ConfigurationEvent {
-				n.SetForceReload(true)
-			}
+			if evt, ok := event.(store.Event); ok {
+				glog.V(3).Infof("Event %v received - object %v", evt.Type, evt.Obj)
+				if evt.Type == store.ConfigurationEvent {
+					n.SetForceReload(true)
+				}
 
-			n.syncQueue.Enqueue(evt.Obj)
+				n.syncQueue.Enqueue(evt.Obj)
+			} else {
+				glog.Warningf("unexpected event type received %T", event)
+			}
 		case <-n.stopCh:
 			break
 		}
@@ -513,7 +552,7 @@ func (n *NGINXController) OnUpdate(ingressCfg ingress.Configuration) error {
 		wp = 1
 	}
 	maxOpenFiles := (sysctlFSFileMax() / wp) - 1024
-	glog.V(3).Infof("maximum number of open file descriptors : %v", sysctlFSFileMax())
+	glog.V(2).Infof("maximum number of open file descriptors : %v", maxOpenFiles)
 	if maxOpenFiles < 1024 {
 		// this means the value of RLIMIT_NOFILE is too low.
 		maxOpenFiles = 1024

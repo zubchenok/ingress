@@ -19,7 +19,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-export NGINX_VERSION=1.13.8
+export NGINX_VERSION=1.13.9
 export NDK_VERSION=0.3.0
 export VTS_VERSION=0.1.15
 export SETMISC_VERSION=0.31
@@ -33,6 +33,7 @@ export ZIPKIN_CPP_VERSION=0.2.0
 export JAEGER_VERSION=0.1.0
 export MODSECURITY_VERSION=1.0.0
 export LUA_VERSION=0.10.12rc2
+export COOKIE_FLAG_VERSION=1.1.0
 
 export BUILD_PATH=/tmp/build
 
@@ -94,18 +95,22 @@ if [[ ${ARCH} == "s390x" ]]; then
   git config --global pack.threads "1"
 fi
 
-# download GeoIP databases
-wget -O /etc/nginx/GeoIP.dat.gz https://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz || { echo 'Could not download GeoLiteCountry, exiting.' ; exit 1; }
-wget -O /etc/nginx/GeoLiteCity.dat.gz https://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz || { echo 'Could not download GeoLiteCity, exiting.' ; exit 1; }
-
-gunzip /etc/nginx/GeoIP.dat.gz
-gunzip /etc/nginx/GeoLiteCity.dat.gz
+# Get the GeoIP data
+GEOIP_FOLDER=/etc/nginx/geoip
+mkdir -p $GEOIP_FOLDER
+function geoip_get {
+  wget -O $GEOIP_FOLDER/$1 $2 || { echo "Could not download $1, exiting." ; exit 1; }
+  gunzip $GEOIP_FOLDER/$1
+}
+geoip_get "GeoIP.dat.gz" "https://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/GeoIP.dat.gz"
+geoip_get "GeoLiteCity.dat.gz" "https://geolite.maxmind.com/download/geoip/database/GeoLiteCity.dat.gz"
+geoip_get "GeoIPASNum.dat.gz" "http://download.maxmind.com/download/geoip/database/asnum/GeoIPASNum.dat.gz"
 
 mkdir --verbose -p "$BUILD_PATH"
 cd "$BUILD_PATH"
 
 # download, verify and extract the source files
-get_src 8410b6c31ff59a763abf7e5a5316e7629f5a5033c95a3a0ebde727f9ec8464c5 \
+get_src 5faea18857516fe68d30be39c3032bd22ed9cf85e1a6fdf32e3721d96ff7fa42 \
         "http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz"
 
 get_src 88e05a99a8a7419066f5ae75966fb1efc409bad4522d14986da074554ae61619 \
@@ -147,6 +152,9 @@ get_src 18edf2d18fa331265c36516a4a19ba75d26f46eafcc5e0c2d9aa6c237e8bc110 \
 get_src 678ec4b6c2b6bba7e8000f42feb71d2bf044a44cf3909b3cbbccb708827ca7a6 \
         "https://github.com/jaegertracing/cpp-client/archive/v$JAEGER_VERSION.tar.gz"
 
+get_src 9915ad1cf0734cc5b357b0d9ea92fec94764b4bf22f4dce185cbd65feda30ec1 \
+        "https://github.com/AirisX/nginx_cookie_flag_module/archive/v$COOKIE_FLAG_VERSION.tar.gz"
+
 #https://blog.cloudflare.com/optimizing-tls-over-tcp-to-reduce-latency/
 curl -sSL -o nginx__dynamic_tls_records.patch https://raw.githubusercontent.com/cloudflare/sslconfig/master/patches/nginx__1.11.5_dynamic_tls_records.patch
 
@@ -181,21 +189,70 @@ make install
 
 # Get Brotli source and deps
 cd "$BUILD_PATH"
-git clone --depth=1 https://github.com/eustas/ngx_brotli.git
-cd ngx_brotli 
+git clone --depth=1 https://github.com/google/ngx_brotli.git
+cd ngx_brotli
 git submodule init
 git submodule update
 
 # build modsecurity library
 cd "$BUILD_PATH"
-git clone --depth 1 -b v3/master --single-branch https://github.com/SpiderLabs/ModSecurity
+git clone -b v3/dev/performance --single-branch https://github.com/SpiderLabs/ModSecurity
 cd ModSecurity/
+git checkout 62022b49a22389cdecd35110e503285494fdf938 
 git submodule init
 git submodule update
 sh build.sh
 ./configure --disable-doxygen-doc --disable-examples --disable-dependency-tracking
 make
 make install
+
+# Download owasp modsecurity crs
+cd /etc/nginx/
+git clone -b v3.1/dev --single-branch https://github.com/SpiderLabs/owasp-modsecurity-crs
+cd owasp-modsecurity-crs
+git checkout ce36edef52c17ad4d607d435477511d1b6dbe162
+
+mv crs-setup.conf.example crs-setup.conf
+mv rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf.example rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
+mv rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf.example rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
+cd ..
+
+# Download modsecurity.conf
+mkdir modsecurity
+cd modsecurity
+curl -sSL -o modsecurity.conf https://raw.githubusercontent.com/SpiderLabs/ModSecurity/v3/dev/performance/modsecurity.conf-recommended
+
+# OWASP CRS v3 rules
+echo "
+Include /etc/nginx/owasp-modsecurity-crs/crs-setup.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-901-INITIALIZATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-903.9001-DRUPAL-EXCLUSION-RULES.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-903.9002-WORDPRESS-EXCLUSION-RULES.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-905-COMMON-EXCEPTIONS.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-910-IP-REPUTATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-911-METHOD-ENFORCEMENT.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-912-DOS-PROTECTION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-913-SCANNER-DETECTION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-920-PROTOCOL-ENFORCEMENT.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-921-PROTOCOL-ATTACK.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-931-APPLICATION-ATTACK-RFI.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-932-APPLICATION-ATTACK-RCE.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-933-APPLICATION-ATTACK-PHP.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-943-APPLICATION-ATTACK-SESSION-FIXATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-950-DATA-LEAKAGES.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-951-DATA-LEAKAGES-SQL.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-952-DATA-LEAKAGES-JAVA.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-953-DATA-LEAKAGES-PHP.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-954-DATA-LEAKAGES-IIS.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-959-BLOCKING-EVALUATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-980-CORRELATION.conf
+Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
+" > /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
 
 # build nginx
 cd "$BUILD_PATH/nginx-$NGINX_VERSION"
@@ -239,7 +296,7 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --add-module=$BUILD_PATH/nginx-goodies-nginx-sticky-module-ng-$STICKY_SESSIONS_VERSION \
   --add-module=$BUILD_PATH/nginx-http-auth-digest-$NGINX_DIGEST_AUTH \
   --add-module=$BUILD_PATH/ngx_http_substitutions_filter_module-$NGINX_SUBSTITUTIONS \
-  --add-module=$BUILD_PATH/lua-nginx-module-$LUA_VERSION \
+  --add-module=$BUILD_PATH/nginx_cookie_flag_module-$COOKIE_FLAG_VERSION \
   --add-dynamic-module=$BUILD_PATH/nginx-opentracing-$NGINX_OPENTRACING_VERSION/opentracing \
   --add-dynamic-module=$BUILD_PATH/nginx-opentracing-$NGINX_OPENTRACING_VERSION/jaeger \
   --add-dynamic-module=$BUILD_PATH/nginx-opentracing-$NGINX_OPENTRACING_VERSION/zipkin \
@@ -321,53 +378,3 @@ cp $HUNTER_INSTALL_DIR/lib/libthrift* /usr/local/lib
 rm /usr/local/lib/libthrift*.a
 
 rm -rf $HOME/.hunter
-
-# Download owasp modsecurity crs
-cd /etc/nginx/
-curl -sSL -o master.tgz https://github.com/SpiderLabs/owasp-modsecurity-crs/archive/v3.0.2/master.tar.gz
-tar zxpvf master.tgz
-mv owasp-modsecurity-crs-3.0.2/ owasp-modsecurity-crs
-rm master.tgz
-
-cd owasp-modsecurity-crs
-mv crs-setup.conf.example crs-setup.conf
-mv rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf.example rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
-mv rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf.example rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
-cd ..
-
-# Download modsecurity.conf
-mkdir modsecurity
-cd modsecurity
-curl -sSL -o modsecurity.conf https://raw.githubusercontent.com/SpiderLabs/ModSecurity/v3/master/modsecurity.conf-recommended
-
-# OWASP CRS v3 rules
-echo "
-Include /etc/nginx/owasp-modsecurity-crs/crs-setup.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-901-INITIALIZATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-903.9001-DRUPAL-EXCLUSION-RULES.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-903.9002-WORDPRESS-EXCLUSION-RULES.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-905-COMMON-EXCEPTIONS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-910-IP-REPUTATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-911-METHOD-ENFORCEMENT.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-912-DOS-PROTECTION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-913-SCANNER-DETECTION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-920-PROTOCOL-ENFORCEMENT.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-921-PROTOCOL-ATTACK.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-930-APPLICATION-ATTACK-LFI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-931-APPLICATION-ATTACK-RFI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-932-APPLICATION-ATTACK-RCE.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-933-APPLICATION-ATTACK-PHP.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-942-APPLICATION-ATTACK-SQLI.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-943-APPLICATION-ATTACK-SESSION-FIXATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-950-DATA-LEAKAGES.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-951-DATA-LEAKAGES-SQL.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-952-DATA-LEAKAGES-JAVA.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-953-DATA-LEAKAGES-PHP.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-954-DATA-LEAKAGES-IIS.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-959-BLOCKING-EVALUATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-980-CORRELATION.conf
-Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
-" > /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
