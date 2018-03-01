@@ -8,7 +8,7 @@
 - [Custom Provider](#custom-provider)
   - [minikube](#minikube)
   - [AWS](#aws)
-  - [GCE - GKE](#gce-gke)
+  - [GCE - GKE](#gce---gke)
   - [Azure](#azure)
   - [Baremetal](#baremetal)
 - [Using Helm](#using-helm)
@@ -225,6 +225,12 @@ To install the chart with the release name `my-nginx`:
 
 ```console
 helm install stable/nginx-ingress --name my-nginx
+```
+
+If the kubernetes cluster has RBAC enabled, then run:
+
+```console
+helm install stable/nginx-ingress --name my-nginx --set rbac.create=true
 ```
 
 ## Verify installation

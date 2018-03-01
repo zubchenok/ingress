@@ -36,6 +36,7 @@ The following annotations are supported:
 |[nginx.ingress.kubernetes.io/from-to-www-redirect](#redirect-from-to-www)|"true" or "false"|
 |[nginx.ingress.kubernetes.io/limit-connections](#rate-limiting)|number|
 |[nginx.ingress.kubernetes.io/limit-rps](#rate-limiting)|number|
+|[nginx.ingress.kubernetes.io/permanent-redirect](#permanent-redirect)|string|
 |[nginx.ingress.kubernetes.io/proxy-body-size](#custom-max-body-size)|string|
 |[nginx.ingress.kubernetes.io/proxy-connect-timeout](#custom-timeouts)|number|
 |[nginx.ingress.kubernetes.io/proxy-send-timeout](#custom-timeouts)|number|
@@ -60,6 +61,8 @@ The following annotations are supported:
 |[nginx.ingress.kubernetes.io/whitelist-source-range](#whitelist-source-range)|CIDR|
 |[nginx.ingress.kubernetes.io/proxy-buffering](#proxy-buffering)|string|
 |[nginx.ingress.kubernetes.io/ssl-ciphers](#ssl-ciphers)|string|
+|[nginx.ingress.kubernetes.io/connection-proxy-header](#connection-proxy-header)|string|
+|[nginx.ingress.kubernetes.io/enable-access-log](#enable-access-log)|"true" or "false"|
 
 **Note:** all the values must be a string. In case of booleans or number it must be quoted.
 
@@ -137,9 +140,9 @@ To enable consistent hashing for a backend:
 
 This configuration setting allows you to control the value for host in the following statement: `proxy_set_header Host $host`, which forms part of the location block.  This is useful if you need to call the upstream server by something other than `$host`.
 
-### Certificate Authentication
+### Client Certificate Authentication
 
-It's possible to enable Certificate-Based Authentication (Mutual Authentication) using additional annotations in Ingress Rule.
+It is possible to enable Client Certificate Authentication using additional annotations in Ingress Rule.
 
 The annotations are:
 ```
@@ -173,7 +176,7 @@ nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream
 Indicates if the received certificates should be passed or not to the upstream server.
 By default this is disabled.
 
-Please check the [tls-auth](../examples/auth/client-certs/README.md) example.
+Please check the [client-certs](../examples/auth/client-certs/README.md) example.
 
 **Important:**
 
@@ -297,7 +300,7 @@ Additionally it is possible to set:
 
 `nginx.ingress.kubernetes.io/auth-response-headers`: `<Response_Header_1, ..., Response_Header_n>` to specify headers to pass to backend once authorization request completes.
 
-`nginx.ingress.kuberentes.io/auth-request-redirect`: `<Request_Redirect_URL>`  to specify the X-Auth-Request-Redirect header value.
+`nginx.ingress.kubernetes.io/auth-request-redirect`: `<Request_Redirect_URL>`  to specify the X-Auth-Request-Redirect header value.
 
 Please check the [external-auth](../examples/auth/external-auth/README.md) example.
 
@@ -322,6 +325,9 @@ The annotation `nginx.ingress.kubernetes.io/limit-rate`, `nginx.ingress.kubernet
 `nginx.ingress.kubernetes.io/limit-rate`: rate of request that accepted from a client each second.
 
 To configure this setting globally for all Ingress rules, the `limit-rate-after` and `limit-rate` value may be set in the NGINX ConfigMap. if you set the value in ingress annotation will cover global setting.
+
+### Permanent Redirect
+This annotation allows to return a permanent redirect instead of sending data to the upstream.  For example `nginx.ingress.kubernetes.io/permanent-redirect: https://www.google.com` would redirect everything to Google.
 
 ### SSL Passthrough
 
@@ -394,7 +400,7 @@ In some scenarios is required to have different values. To allow this we provide
 ### Proxy redirect
 
 With the annotations `nginx.ingress.kubernetes.io/proxy-redirect-from` and `nginx.ingress.kubernetes.io/proxy-redirect-to` it is possible to set the text that should be changed in the `Location` and `Refresh` header fields of a proxied server response (http://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_redirect)
-Setting "off" or "default" in the annotation `nginx.ingress.kubernetes.io/proxy-redirect-to` disables `nginx.ingress.kubernetes.io/proxy-redirect-to`
+Setting "off" or "default" in the annotation `nginx.ingress.kubernetes.io/proxy-redirect-from` disables `nginx.ingress.kubernetes.io/proxy-redirect-to`
 Both annotations will be used in any other case
 By default the value is "off".
 
@@ -429,4 +435,19 @@ Using this annotation will set the `ssl_ciphers` directive at the server level. 
 
 ```yaml
 nginx.ingress.kubernetes.io/ssl-ciphers: "ALL:!aNULL:!EXPORT56:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv2:+EXP"
+```
+
+### Connection proxy header
+Using this annotation will override the default connection header set by nginx. To use custom values in an Ingress rule, define the annotation:
+
+```yaml
+nginx.ingress.kubernetes.io/connection-proxy-header: "keep-alive"
+```
+
+### Enable Access Log
+
+In some scenarios could be required to disable NGINX access logs. To enable this feature use the annotation:
+
+```yaml
+nginx.ingress.kubernetes.io/enable-access-log: "false"
 ```

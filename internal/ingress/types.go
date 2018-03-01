@@ -29,6 +29,7 @@ import (
 	"k8s.io/ingress-nginx/internal/ingress/annotations/connection"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/cors"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/ipwhitelist"
+	"k8s.io/ingress-nginx/internal/ingress/annotations/log"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/proxy"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/ratelimit"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/redirect"
@@ -161,6 +162,8 @@ type Server struct {
 	ServerSnippet string `json:"serverSnippet"`
 	// SSLCiphers returns list of ciphers to be enabled
 	SSLCiphers string `json:"sslCiphers,omitempty"`
+	// AuthTLSError contains the reason why the access to a server should be denied
+	AuthTLSError string `json:"authTLSError,omitempty"`
 }
 
 // Location describes an URI inside a server.
@@ -206,7 +209,7 @@ type Location struct {
 	// Denied returns an error when this location cannot not be allowed
 	// Requesting a denied location should return HTTP code 403.
 	Denied error `json:"denied,omitempty"`
-	// CorsConfig returns the Cors Configration for the ingress rule
+	// CorsConfig returns the Cors Configuration for the ingress rule
 	// +optional
 	CorsConfig cors.Config `json:"corsConfig,omitempty"`
 	// ExternalAuth indicates the access to this location requires
@@ -257,6 +260,9 @@ type Location struct {
 	// original location.
 	// +optional
 	XForwardedPrefix bool `json:"xForwardedPrefix,omitempty"`
+	// Logs allows to enable or disable the nginx logs
+	// By default this is enabled
+	Logs log.Config `json:"logs,omitempty"`
 }
 
 // SSLPassthroughBackend describes a SSL upstream server configured
