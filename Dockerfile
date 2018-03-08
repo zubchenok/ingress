@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM quay.io/kubernetes-ingress-controller/nginx-amd64:0.32
+#FROM quay.io/kubernetes-ingress-controller/nginx-amd64:0.32
+FROM index.docker.io/elvinefendi/nginx-amd64:0.37
 
 RUN clean-install \
   diffutils \
