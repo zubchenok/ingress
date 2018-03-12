@@ -11,6 +11,7 @@ local resty_lock = require("resty.lock")
 local BACKENDS_SYNC_INTERVAL = 1
 
 ROUND_ROBIN_LOCK_KEY = "round_robin"
+DEFAULT_LB_ALG = "round_robin"
 
 local round_robin_state = ngx.shared.round_robin_state
 
@@ -23,28 +24,39 @@ if not backends then
   return error("failed to create the cache for backends: " .. (err or "unknown"))
 end
 
-local function balance()
+local function get_current_backend()
   local backend_name = ngx.var.proxy_upstream_name
-  local backend = backends:get(backend_name)
-  -- lb_alg field does not exist for ingress.Backend struct for now, so lb_alg
-  -- will always be round_robin
-  local lb_alg = backend.lb_alg or "round_robin"
+  return backends:get(backend_name)
+end
+
+local function get_current_lb_alg()
+  local backend = get_current_backend()
+  return backend["load-balance"] or DEFAULT_LB_ALG
+end
+
+local function balance()
+  local backend = get_current_backend()
+  local lb_alg = get_current_lb_alg()
 
   if lb_alg == "ip_hash" then
     -- TODO(elvinefendi) implement me
     return backend.endpoints[0].address, backend.endpoints[0].port
   end
 
+  if lb_alg ~= DEFAULT_LB_ALG then
+    ngx.log(ngx.WARN, tostring(lb_alg) .. " is not supported, falling back to " .. DEFAULT_LB_ALG)
+  end
+
   -- Round-Robin
-  round_robin_lock:lock(backend_name .. ROUND_ROBIN_LOCK_KEY)
-  local index = round_robin_state:get(backend_name)
+  round_robin_lock:lock(backend.name .. ROUND_ROBIN_LOCK_KEY)
+  local index = round_robin_state:get(backend.name)
   local index, endpoint = next(backend.endpoints, index)
   if not index then
     index = 1
     endpoint = backend.endpoints[index]
   end
-  round_robin_state:set(backend_name, index)
-  round_robin_lock:unlock(backend_name .. ROUND_ROBIN_LOCK_KEY)
+  round_robin_state:set(backend.name, index)
+  round_robin_lock:unlock(backend.name .. ROUND_ROBIN_LOCK_KEY)
 
   return endpoint.address, endpoint.port
 end
@@ -98,7 +110,7 @@ function _M.call()
 
   local ok, err = ngx_balancer.set_current_peer(host, port)
   if ok then
-    ngx.log(ngx.INFO, "current peer is set to " .. host .. ":" .. port)
+    ngx.log(ngx.INFO, "current peer is set to " .. host .. ":" .. port .. " using lb_alg " .. tostring(get_current_lb_alg()))
   else
     ngx.log(ngx.ERR, "error while setting current upstream peer to: " .. tostring(err))
   end
