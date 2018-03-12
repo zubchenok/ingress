@@ -1,0 +1,28 @@
+name: ingress
+
+up:
+  - ruby: 2.3.1
+  - bundler
+  - homebrew:
+    - dep
+    - curl
+    - Caskroom/cask/docker
+    - Caskroom/cask/minikube
+    - openssl
+  - go: '1.9'
+  - custom:
+      name: Hyperkit driver for minikube
+      met?: ls /usr/local/bin/docker-machine-driver-hyperkit
+      meet: scripts/install_hyperkit.sh
+  - custom:
+      name: Minikube Cluster
+      met?: test $(minikube status | grep Running | wc -l) -eq 2 && $(minikube status | grep -q 'Correctly Configured')
+      down: minikube stop
+      meet: minikube start --vm-driver=hyperkit --kubernetes-version=v1.9.0
+
+commands:
+  reset-minikube: minikube delete && rm -rf ~/.minikube
+  test: make test
+  build: DOCKER=docker REGISTRY=$USER make build container
+  vendor-update: dep ensure -update && dep prune
+  update-codegen: make code-generator
