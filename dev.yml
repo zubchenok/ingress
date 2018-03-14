@@ -12,13 +12,25 @@ up:
   - go: '1.9'
   - custom:
       name: Hyperkit driver for minikube
-      met?: ls /usr/local/bin/docker-machine-driver-hyperkit
+      met?: test -f /usr/local/bin/docker-machine-driver-hyperkit
       meet: scripts/install_hyperkit.sh
   - custom:
       name: Minikube Cluster
       met?: test $(minikube status | grep Running | wc -l) -eq 2 && $(minikube status | grep -q 'Correctly Configured')
       down: minikube stop
       meet: minikube start --vm-driver=hyperkit --kubernetes-version=v1.9.0
+  - custom:
+      name: Move directory to k8s.io/ingress
+      met?: test -d $GOPATH/src/k8s.io/ingress
+      meet: mkdir -p $GOPATH/src/k8s.io && mv `/opt/dev/bin/dev project-path ingress` $GOPATH/src/k8s.io/ && echo "Moved repo to k8s.io/ingress directory"
+  - custom: 
+      name: Set dev alias 'ingress' to k8s.io/ingress
+      met?: test `/opt/dev/bin/dev config get project-alias.ingress` = $GOPATH/src/k8s.io/ingress
+      meet: /opt/dev/bin/dev config set project-alias.ingress $GOPATH/src/k8s.io/ingress
+  - custom: 
+      name: Install dependencies
+      met?: test `/opt/dev/bin/dev config get project-alias.ingress` = $GOPATH/src/k8s.io/ingress
+      meet: /opt/dev/bin/dev config set project-alias.ingress $GOPATH/src/k8s.io/ingress      
 
 commands:
   reset-minikube: minikube delete && rm -rf ~/.minikube
