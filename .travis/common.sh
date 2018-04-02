@@ -40,9 +40,9 @@ if ! [ -x "$(command -v jq)" ]; then
   sudo apt-get install -y jq
 fi
 
-if [ "$TRAVIS_REPO_SLUG" != "kubernetes/ingress-nginx" ];
+if [ "$TRAVIS_REPO_SLUG" != "Shopify/ingress" ];
 then
-  echo "Only builds from kubernetes/ingress-nginx repository is allowed.";
+  echo "Only builds from Shopify/ingress repository is allowed.";
   exit 0;
 fi
 
