@@ -46,25 +46,17 @@ then
   exit 0;
 fi
 
-# variables QUAY_USERNAME and QUAY_PASSWORD are required to push docker images
-if [ "$QUAY_USERNAME" == "" ];
+# variables GCR_USERNAME and GCR_PASSWORD are required to push docker images
+if [ "$GCR_USERNAME" == "" ];
 then
-  echo "Environment variable QUAY_USERNAME is missing.";
+  echo "Environment variable GCR_USERNAME is missing.";
   exit 0;
 fi
 
-if [ "$QUAY_PASSWORD" == "" ];
+if [ "$GCR_PASSWORD" == "" ];
 then
-  echo "Environment variable QUAY_PASSWORD is missing.";
+  echo "Environment variable GCR_PASSWORD is missing.";
   exit 0;
 fi
 
-function docker_tag_exists() {
-    TAG=${2//\"/}
-    IMAGES=$(curl -s -H "Authorization: Bearer ${QUAY_PASSWORD}" https://quay.io/api/v1/repository/$1-$3/image/ | jq '.images | sort_by(.sort_index) | .[] .tags | select(.[] !=null) | .[0]' | sed s/\"//g)
-    if echo "$IMAGES" | grep -q -P "(^|\s)$TAG(?=\s|$)" ; then
-        return 0
-    fi
-
-    return 1
-}
+echo "******* Proceeding to build image"
