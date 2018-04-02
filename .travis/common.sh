@@ -46,26 +46,6 @@ then
   exit 0;
 fi
 
-SKIP_MESSAGE="Publication of docker image to quay.io registry skipped."
-
-if [ "$TRAVIS_EVENT_TYPE" != "api" ];
-then
-  echo "Only builds triggered from travis-ci API is allowed. $SKIP_MESSAGE";
-  exit 0;
-fi
-
-if [ "$TRAVIS_PULL_REQUEST" != "false" ];
-then
-  echo "This is a pull request. $SKIP_MESSAGE";
-  exit 0;
-fi
-
-if [ "$TRAVIS_PULL_REQUEST_BRANCH" != "" ];
-then
-  echo "Only images build from master branch are allowed. $SKIP_MESSAGE";
-  exit 0;
-fi
-
 # variables QUAY_USERNAME and QUAY_PASSWORD are required to push docker images
 if [ "$QUAY_USERNAME" == "" ];
 then
