@@ -47,15 +47,15 @@ then
 fi
 
 # variables GCR_USERNAME and GCR_PASSWORD are required to push docker images
-if [ "$GCR_USERNAME" == "" ];
+if [ "$DOCKER_USERNAME" == "" ];
 then
-  echo "Environment variable GCR_USERNAME is missing.";
+  echo "Environment variable DOCKER_USERNAME is missing.";
   exit 0;
 fi
 
-if [ "$GCR_PASSWORD" == "" ];
+if [ "$DOCKER_PASSWORD" == "" ];
 then
-  echo "Environment variable GCR_PASSWORD is missing.";
+  echo "Environment variable DOCKER_PASSWORD is missing.";
   exit 0;
 fi
 
