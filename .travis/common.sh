@@ -46,7 +46,7 @@ then
   exit 0;
 fi
 
-# variables GCR_USERNAME and GCR_PASSWORD are required to push docker images
+# variables DOCKER_USERNAME and DOCKER_PASSWORD are required to push docker images
 if [ "$DOCKER_USERNAME" == "" ];
 then
   echo "Environment variable DOCKER_USERNAME is missing.";
@@ -58,5 +58,3 @@ then
   echo "Environment variable DOCKER_PASSWORD is missing.";
   exit 0;
 fi
-
-echo "******* Proceeding to build image"
