@@ -30,7 +30,7 @@ kubectl set image \
     deployments \
     --namespace ingress-nginx \
 	--selector app=ingress-nginx \
-    nginx-ingress-controller=quay.io/kubernetes-ingress-controller/nginx-ingress-controller:test
+    nginx-ingress-controller=Shopify/nginx-ingress:test
 
 sleep 5
 

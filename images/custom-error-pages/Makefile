@@ -4,7 +4,7 @@ BUILDTAGS=
 
 # Use the 0.0 tag for testing, it shouldn't clobber any release builds
 TAG?=0.1
-REGISTRY?=quay.io/kubernetes-ingress-controller
+REGISTRY?=shopify
 GOOS?=linux
 DOCKER?=docker
 SED_I?=sed -i

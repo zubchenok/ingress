@@ -14,9 +14,9 @@
 
 # 0.0.0 shouldn't clobber any released builds
 TAG ?= 0.39
-REGISTRY ?= quay.io/kubernetes-ingress-controller
+REGISTRY ?= shopify
 ARCH ?= $(shell go env GOARCH)
-DOCKER ?= gcloud docker --
+DOCKER ?= docker
 
 ALL_ARCH = amd64 arm arm64 ppc64le s390x
 SED_I?=sed -i
