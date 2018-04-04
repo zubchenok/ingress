@@ -62,6 +62,7 @@ jobs:
     - make e2e-test
   # split builds to avoid job timeouts
   - stage: publish amd64
+    if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
     script:
     - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh amd64
   - stage: publish arm
