@@ -28,7 +28,7 @@ get_src()
 }
 
 cd "$DESTDIR"
-rm -rf resty; mkdir resty; cd resty
+rm -rf *
 
 get_src d4a9ed0d2405f41eb0178462b398afde8599c5115dcc1ff8f60e2f34a41a4c21 \
         "https://github.com/openresty/lua-resty-lrucache/archive/v0.07.tar.gz"
