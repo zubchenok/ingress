@@ -58,3 +58,13 @@ then
   echo "Environment variable DOCKER_PASSWORD is missing.";
   exit 0;
 fi
+
+function docker_tag_exists() {
+    TAG=${2//\"/}
+    IMAGES=$(curl -s -H "Authorization: Bearer ${DOCKER_PASSWORD}" https://hub.docker.com/r/shopify/$1-$3/ | jq '.images | sort_by(.sort_index) | .[] .tags | select(.[] !=null) | .[0]' | sed s/\"//g)
+    if echo "$IMAGES" | grep -q -P "(^|\s)$TAG(?=\s|$)" ; then
+        return 0
+    fi
+
+    return 1
+}
