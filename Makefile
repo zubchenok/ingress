@@ -153,7 +153,7 @@ test:
 
 .PHONY: lua-test
 lua-test:
-	@for file in ./test/lua/unit/*.lua; do \
+	@for file in ./test/lua/unit/**; do \
 		luajit $$file; \
 	done
 
