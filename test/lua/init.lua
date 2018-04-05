@@ -11,9 +11,9 @@ package.path = cwd .. "/rootfs/etc/nginx/lua/?.lua;" ..
   cwd .. "/rootfs/etc/nginx/lua/?/?.lua;" ..
   cwd ..  "/rootfs/etc/nginx/lua/vendor/lua-resty-lock-0.07/lib/lock.lua;" ..
   cwd ..  "/rootfs/etc/nginx/lua/vendor/lua-resty-lrucache-0.07/lib/lrucache.lua;" ..
-  "./lua/?.lua;./test/lua/mock/?.lua;./lua/vendor/?.lua;./test/lua/lib/?.lua;"..
+  "./lua/?.lua;./test/lua/?.lua;./test/lua/lib/?.lua;"..
   nginx_lua_modules_lib .."/?.lua;" .. package.path
-package.cpath = "./test/lua/vendor/_" .. os .."/?.so;" .. package.cpath
+package.cpath = "./test/lua/lib/_" .. os .."/?.so;" .. package.cpath
 
 lunity = require("lunity")
 ngx = require("ngx_mock")

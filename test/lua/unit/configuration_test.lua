@@ -1,7 +1,7 @@
 local cwd = io.popen("pwd"):read('*l')
 package.path = cwd .. "/test/lua/?.lua;" ..package.path
 
-require("helpers.init")
+require("init")
 
 module("configuration_tests", lunity)
 
