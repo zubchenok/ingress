@@ -65,19 +65,3 @@ jobs:
     if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
     script:
     - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh amd64
-  - stage: publish arm
-    if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
-    script:
-    - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh arm
-  - stage: publish arm64
-    if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
-    script:
-    - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh arm64
-  - stage: publish ppc64le
-    if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
-    script:
-    - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh ppc64le
-  - stage: publish s390x
-    if: type = push AND branch = fix-ci-travis AND repo = Shopify/ingress
-    script:
-    - travis_wait ${TRAVIS_TIMEOUT} .travis/publish.sh s390x
