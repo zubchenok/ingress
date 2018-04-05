@@ -61,12 +61,8 @@ make install
 if [[ (${ARCH} != "ppc64le") && (${ARCH} != "s390x") ]]; then
   cd ..
   cd "LuaJIT-2.1.0-beta3"
-  make PREFIX=""
-  make install PREFIX=""
-  ln -sf LuaJIT-2.1.0-beta3 /usr/local/bin/luajit
-
-  export LUAJIT_LIB="$DESTDIR/usr/local/lib"
-  export LUAJIT_INC="$DESTDIR/usr/local/include/luajit-2.1"
+  make 
+  sudo make install
 fi
 
 rm -rf "$BUILD_PATH"
