@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export BUILD_PATH=rootfs/etc/nginx/lua/vendor
-export CURR_PATH="$(dirname "$0")"
+DESTDIR=./rootfs/etc/nginx/lua/vendor
 
 get_src()
 {
@@ -28,7 +27,7 @@ get_src()
   rm -rf "$f"
 }
 
-cd "$(dirname "$0")"; cd ..; cd "$BUILD_PATH"
+cd "$DESTDIR"
 rm -rf resty; mkdir resty; cd resty
 
 get_src d4a9ed0d2405f41eb0178462b398afde8599c5115dcc1ff8f60e2f34a41a4c21 \
