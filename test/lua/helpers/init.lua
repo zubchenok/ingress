@@ -9,8 +9,8 @@ end
 local cwd = io.popen("pwd"):read('*l')
 package.path = cwd .. "/rootfs/etc/nginx/lua/?.lua;" ..
   cwd .. "/rootfs/etc/nginx/lua/?/?.lua;" ..
-  cwd ..  "/rootfs/etc/nginx/lua/vendor/resty/lua-resty-lock-0.07/lib/lock.lua;" ..
-  cwd ..  "/rootfs/etc/nginx/lua/vendor/resty/lua-resty-lrucache-0.07/lib/lrucache.lua;" ..
+  cwd ..  "/rootfs/etc/nginx/lua/vendor/lua-resty-lock-0.07/lib/lock.lua;" ..
+  cwd ..  "/rootfs/etc/nginx/lua/vendor/lua-resty-lrucache-0.07/lib/lrucache.lua;" ..
   "./lua/?.lua;./test/lua/mock/?.lua;./lua/vendor/?.lua;./test/lua/lib/?.lua;"..
   nginx_lua_modules_lib .."/?.lua;" .. package.path
 package.cpath = "./test/lua/vendor/_" .. os .."/?.so;" .. package.cpath

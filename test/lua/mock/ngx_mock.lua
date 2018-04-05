@@ -37,7 +37,6 @@ local _ngx = {
     _logs = {},
     req = {},
     reqbody = "",
-    timer = {},
     var = {},
     printed = nil,
     shared = {},
@@ -64,7 +63,7 @@ function _ngx.reset()
     _ngx.shared.balancer_ewma = setmetatable({_vals = {}}, _shared_dict)
     _ngx.shared.configuration_data = setmetatable({
         _vals = {
-          backends = {}
+          backends = "backenddata"
         }
       },
       _shared_dict)
@@ -72,6 +71,7 @@ function _ngx.reset()
     _ngx.var.proxy_upstream_name = "fake_upstream"
     _ngx.printed = nil
     _ngx.status = ngx.OK
+    _ngx.req.body = "reqbody"
 end
 
 function _ngx.log(a, ...)
@@ -79,7 +79,7 @@ function _ngx.log(a, ...)
 end
 
 function _ngx.req.get_body_data()
-  return _ngx.reqbody
+  return _ngx.req.body
 end
 
 function _ngx.req.read_body()
@@ -87,18 +87,6 @@ end
 
 function _ngx.print(str)
     _ngx.printed = str
-end
-
-function _ngx.exit(code)
-  assert(type(code) == 'number')
-  _ngx.exit_code = code
-  exit_module()
-end
-
-function _ngx.timer.at(delay, func, ...)
-    -- premature argument is false
-    func(false, ...)
-    return true
 end
 
 function _ngx.get_phase()
