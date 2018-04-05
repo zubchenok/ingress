@@ -14,7 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DESTDIR=./rootfs/etc/nginx/lua/vendor
+VENDOR_DIR=./rootfs/etc/nginx/lua/vendor
+export DESTDIR=../../
+export PREFIX=
 
 get_src()
 {
@@ -27,8 +29,10 @@ get_src()
   rm -rf "$f"
 }
 
-cd "$DESTDIR"
+cd "$VENDOR_DIR"
 rm -rf *
+
+mkdir temp; cd temp
 
 get_src d4a9ed0d2405f41eb0178462b398afde8599c5115dcc1ff8f60e2f34a41a4c21 \
         "https://github.com/openresty/lua-resty-lrucache/archive/v0.07.tar.gz"
@@ -50,3 +54,5 @@ make install
 cd ..
 cd "lua-resty-lock-0.07"
 make install
+
+cd ../../; rm -rf temp
