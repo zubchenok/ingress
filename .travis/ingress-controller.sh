@@ -25,6 +25,6 @@ if docker_tag_exists "shopify/nginx-ingress-controller" $(echo $IMAGE | jq .tag)
     exit 0
 fi
 
-echo "building nginx-ingress-$ARCH image..."
+echo "building nginx-ingress-controller-$ARCH image..."
 make -C $DIR/../ sub-container-$ARCH
 make -C $DIR/../ sub-push-$ARCH
