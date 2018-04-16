@@ -108,8 +108,6 @@ $ make lua-test
 
 Lua tests are located in `$GOPATH/src/k8s.io/ingress-nginx/rootfs/etc/nginx/lua/test`. 
 
-
-
 ## Releasing
 
 All Makefiles will produce a release binary, as shown above. To publish this
