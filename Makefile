@@ -46,7 +46,7 @@ ALL_ARCH = amd64 arm arm64 ppc64le s390x
 QEMUVERSION=v2.9.1-1
 
 BUSTEDVERSION=2.0.rc12
-BUSTED_ARGS = -v
+BUSTED_ARGS?=-v
 
 IMGNAME = nginx-ingress-controller
 IMAGE = $(REGISTRY)/$(IMGNAME)
