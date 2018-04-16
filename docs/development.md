@@ -106,7 +106,7 @@ $ cd $GOPATH/src/k8s.io/ingress-nginx
 $ make lua-test
 ```
 
-Lua tests are located in `$GOPATH/src/k8s.io/ingress-nginx/rootfs/etc/nginx/lua/test`. 
+Lua tests are located in `$GOPATH/src/k8s.io/ingress-nginx/rootfs/etc/nginx/lua/test`. When creating a new test file it must follow the naming convention `<mytest>_test.lua` or it will be ignored. 
 
 ## Releasing
 
