@@ -99,10 +99,11 @@ $ cd $GOPATH/src/k8s.io/ingress-nginx
 $ make e2e-test
 ```
 
-To run unit-tests for lua code, run:
+To run unit-tests for lua code locally, run:
 
 ```console
 $ cd $GOPATH/src/k8s.io/ingress-nginx
+$ ./rootfs/etc/nginx/lua/test/up.sh
 $ make lua-test
 ```
 
