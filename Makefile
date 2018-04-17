@@ -45,8 +45,7 @@ ALL_ARCH = amd64 arm arm64 ppc64le s390x
 
 QEMUVERSION=v2.9.1-1
 
-BUSTEDVERSION=2.0.rc12
-BUSTED_ARGS = -v --pattern=_test
+BUSTED_ARGS=-v --pattern=_test
 
 IMGNAME = nginx-ingress-controller
 IMAGE = $(REGISTRY)/$(IMGNAME)
@@ -160,13 +159,7 @@ test:
 
 .PHONY: lua-test
 lua-test:
-	@if luarocks list --porcelain busted $(BUSTEDVERSION) | grep -q "installed" ; then \
-		echo busted already installed, skipping ; \
-	else \
-		echo busted not found, installing via luarocks... ; \
-		luarocks install busted $(BUSTEDVERSION) ; \
-	fi
-	@busted $(BUSTED_ARGS) ./rootfs/etc/nginx/lua/test ; \
+	@busted $(BUSTED_ARGS) ./rootfs/etc/nginx/lua/test;
 
 .PHONY: e2e-image
 e2e-image: sub-container-amd64

@@ -43,6 +43,11 @@ jobs:
     - go get github.com/golang/lint/golint
     - go get -u github.com/jteeuwen/go-bindata/...
     - make verify-all-verbose
+  - stage: Lua Unit Test
+    before_script:
+    - rootfs/etc/nginx/lua/test/up.sh
+    script:
+    - make lua-test
   - stage: Coverage
     before_script:
     # start minikube 
