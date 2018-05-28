@@ -37,36 +37,8 @@ env:
 
 jobs:
   include:
-  - stage: Static Check
-    script:
-    - sudo luarocks install luacheck
-    - make luacheck
-    - mkdir --parents $GOPATH/src/golang.org/x
-      && git clone --depth=1 https://go.googlesource.com/lint $GOPATH/src/golang.org/x/lint
-      && go get golang.org/x/lint/golint
-    - go get github.com/vbatts/git-validation
-    - make verify-all
-  - stage: Lua Unit Test
-    before_script:
-    - rootfs/etc/nginx/lua/test/up.sh
-    script:
-    - make lua-test
-  - stage: Coverage
-    before_script:
-    # start minikube
-    - test/e2e/up.sh
-    script:
-    - make cover
-  - stage: e2e
-    before_script:
-    - go get github.com/onsi/ginkgo/ginkgo
-    - test/e2e/up.sh
-    - make dev-env
-    script:
-    - make e2e-test
   # split builds to avoid job timeouts
   - stage: publish amd64
-    if: type = push AND branch = master AND repo = Shopify/ingress
     script:
     - .travis/publish.sh amd64
   - stage: publish arm
