@@ -24,7 +24,7 @@ export TAG=dev
 export REGISTRY=ingress-controller
 
 echo "[dev-env] building container"
-ARCH=amd64 make build container
+BASEIMAGE=gcr.io/shopify-docker-images/cloud/production/nginx-shopify-build-ubuntu-deb:1.14.0-2 ARCH=amd64 make build container
 
 echo "[dev-env] installing kubectl"
 kubectl version || brew install kubectl
