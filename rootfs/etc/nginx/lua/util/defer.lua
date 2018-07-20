@@ -2,7 +2,7 @@ local util = require("util")
 
 local timer_started = false
 local queue = {}
-local MAX_QUEUE_SIZE = 10000
+local MAX_QUEUE_SIZE = 100000
 
 local _M = {}
 
@@ -40,8 +40,7 @@ function _M.to_timer_phase(func, ...)
   if not timer_started then
     local ok, err = ngx.timer.at(0, flush_queue)
     if ok then
-      -- unfortunately this is to deal with tests - when running unit tests, we
-      -- dont actually run the timer, we call the function inline
+      -- this is to make sure we don't create another timer while the one created is pending
       if util.tablelength(queue) > 0 then
         timer_started = true
       end
