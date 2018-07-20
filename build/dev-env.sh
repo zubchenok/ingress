@@ -36,10 +36,16 @@ if [ -z "${SKIP_MINIKUBE_START}" ]; then
     eval $(minikube docker-env)
 fi
 
+docker images
+
 echo "[dev-env] building container"
 make build container
 
+docker images
+
 docker save "${DEV_IMAGE}" | (eval $(minikube docker-env) && docker load) || true
+
+docker images
 
 echo "[dev-env] installing kubectl"
 kubectl version || brew install kubectl
@@ -48,7 +54,7 @@ echo "[dev-env] deploying NGINX Ingress controller in namespace $NAMESPACE"
 cat ./deploy/mandatory.yaml                            | kubectl apply --namespace=$NAMESPACE -f -
 cat ./deploy/provider/baremetal/service-nodeport.yaml  | kubectl apply --namespace=$NAMESPACE -f -
 
-echo "updating image..."
+echo "updating image to ${DEV_IMAGE}..."
 kubectl set image \
     deployments \
     --namespace ingress-nginx \
