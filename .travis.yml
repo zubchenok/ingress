@@ -30,6 +30,7 @@ env:
 
 jobs:
   include:
+<<<<<<< HEAD
   - stage: Static Check
     script:
     - make static-check
@@ -46,6 +47,8 @@ jobs:
     script:
     - make e2e-test
   # split builds to avoid job timeouts
+=======
+>>>>>>> a branch dedicated for releasing images
   - stage: publish amd64
     if: type = push AND branch = releases AND repo = Shopify/ingress AND env(COMPONENT) = "ingress-controller"
     script:
