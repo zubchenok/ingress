@@ -21,7 +21,8 @@ WORKDIR  /etc/nginx
 RUN clean-install \
   diffutils \
   dumb-init \
-  gdb
+  gdb \
+  strace
 
 COPY . /
 
@@ -48,5 +49,7 @@ RUN bash -eu -c ' \
 # This only works if nginx is started with CMD or ENTRYPOINT
 RUN ln -sf /dev/stdout /var/log/nginx/access.log
 RUN ln -sf /dev/stderr /var/log/nginx/error.log
+
+ENV MALLOC_CHECK_=3
 
 CMD ["/nginx-ingress-controller"]
