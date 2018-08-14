@@ -28,6 +28,7 @@ COPY . /
 # with volumes (custom templates)
 RUN bash -eu -c ' \
   writeDirs=( \
+    /etc/nginx/cores \
     /etc/nginx/template \
     /etc/ingress-controller/ssl \
     /etc/ingress-controller/auth \
