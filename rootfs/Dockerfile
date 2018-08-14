@@ -20,7 +20,8 @@ WORKDIR  /etc/nginx
 
 RUN clean-install \
   diffutils \
-  dumb-init
+  dumb-init \
+  gdb
 
 COPY . /
 

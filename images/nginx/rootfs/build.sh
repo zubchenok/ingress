@@ -444,10 +444,20 @@ fi
 
 # "Combining -flto with -g is currently experimental and expected to produce unexpected results."
 # https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html
-CC_OPT="-g -O0 \
+CC_OPT="-g -O0 -fPIE -fstack-protector-strong \
+  -Wformat \
+  -Werror=format-security \
+  -Wno-deprecated-declarations \
+  -fno-strict-aliasing \
+  -Wdate-time \
+  -D_FORTIFY_SOURCE=2 \
+  --param=ssp-buffer-size=4 \
+  -DTCP_FASTOPEN=23 \
+  -fPIC \
   -I$HUNTER_INSTALL_DIR/include \
+  -Wno-cast-function-type"
 
-LD_OPT="-ljemalloc -fPIE -fPIC -pie -Wl,-z,relro -Wl,-z,now -L$HUNTER_INSTALL_DIR/lib"
+LD_OPT="-fPIE -fPIC -pie -Wl,-z,relro -Wl,-z,now -L$HUNTER_INSTALL_DIR/lib"
 
 if [[ ${ARCH} == "x86_64" ]]; then
   CC_OPT+=' -m64 -mtune=native'
@@ -468,6 +478,8 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --add-dynamic-module=$BUILD_PATH/ngx_http_geoip2_module-${GEOIP2_VERSION} \
   --add-module=$BUILD_PATH/nginx_ajp_module-${NGINX_AJP_VERSION} \
   --add-module=$BUILD_PATH/ngx_brotli"
+
+export MALLOC_CHECK_=3
 
 ./configure \
   --prefix=/usr/share/nginx \
