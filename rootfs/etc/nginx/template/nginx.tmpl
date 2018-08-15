@@ -92,7 +92,6 @@ http {
     }
 
     init_worker_by_lua_block {
-        defer_to_timer.init_worker()
         {{ if $all.DynamicConfigurationEnabled }}
         balancer.init_worker()
         {{ end }}
