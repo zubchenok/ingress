@@ -259,6 +259,7 @@ func (f *Framework) matchNginxConditions(name string, matcher func(cfg string) b
 
 		var match bool
 		errs := InterceptGomegaFailures(func() {
+			glog.Infof("nginx.conf:\n%v", o)
 			if glog.V(10) && len(o) > 0 {
 				glog.Infof("nginx.conf:\n%v", o)
 			}
