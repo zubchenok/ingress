@@ -18,7 +18,6 @@ package lua
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -80,33 +79,29 @@ var _ = framework.IngressNginxDescribe("Dynamic Certificate", func() {
 				ingress.Namespace)
 			Expect(err).ToNot(HaveOccurred())
 
-			resp, _, errs := gorequest.New().
-				Get(fmt.Sprintf("%s?id=certificate_only_changes", f.IngressController.HTTPURL)).
-				Set("Host", "foo.com").
-				End()
-			Expect(len(errs)).Should(BeNumerically("==", 0))
-			Expect(resp.StatusCode).Should(Equal(http.StatusOK))
-
 			_, err = f.KubeClientSet.ExtensionsV1beta1().Ingresses(f.IngressController.Namespace).Update(ingress)
 			Expect(err).ToNot(HaveOccurred())
-			time.Sleep(waitForLuaSync)
+
+			err = f.WaitForNginxServer("foo.com",
+				func(server string) bool {
+					return strings.Contains(server, "server_name foo.com") &&
+						strings.Contains(server, "listen 443")
+				})
+			Expect(err).ToNot(HaveOccurred())
 
 			log, err := f.NginxLogs()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(log).ToNot(BeEmpty())
 
-			index := strings.Index(log, "id=certificate_only_changes")
-			restOfLogs := log[index:]
-
 			By("POSTing new certificates to Lua endpoint")
-			Expect(restOfLogs).To(ContainSubstring(logDynamicConfigSuccess))
-			Expect(restOfLogs).ToNot(ContainSubstring(logDynamicConfigFailure))
+			Expect(log).To(ContainSubstring(logDynamicConfigSuccess))
+			Expect(log).ToNot(ContainSubstring(logDynamicConfigFailure))
 
 			By("skipping Nginx reload")
-			Expect(restOfLogs).ToNot(ContainSubstring(logRequireBackendReload))
-			Expect(restOfLogs).ToNot(ContainSubstring(logBackendReloadSuccess))
-			Expect(restOfLogs).To(ContainSubstring(logSkipBackendReload))
-			Expect(restOfLogs).ToNot(ContainSubstring(logInitialConfigSync))
+			Expect(log).ToNot(ContainSubstring(logRequireBackendReload))
+			Expect(log).ToNot(ContainSubstring(logBackendReloadSuccess))
+			Expect(log).To(ContainSubstring(logSkipBackendReload))
+			Expect(log).ToNot(ContainSubstring(logInitialConfigSync))
 		})
 	})
 
@@ -130,7 +125,13 @@ var _ = framework.IngressNginxDescribe("Dynamic Certificate", func() {
 
 			_, err = f.KubeClientSet.ExtensionsV1beta1().Ingresses(f.IngressController.Namespace).Update(ingress)
 			Expect(err).ToNot(HaveOccurred())
-			time.Sleep(waitForLuaSync)
+
+			err = f.WaitForNginxServer("foo.com",
+				func(server string) bool {
+					return strings.Contains(server, "server_name foo.com") &&
+						strings.Contains(server, "listen 443")
+				})
+			Expect(err).ToNot(HaveOccurred())
 
 			By("checking SSL Certificate using the NGINX IP address")
 			resp, _, errs := gorequest.New().
