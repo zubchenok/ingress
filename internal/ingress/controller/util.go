@@ -80,6 +80,7 @@ var valgrind = []string{
 	"--leak-check=full",
 	"--show-leak-kinds=all",
 	"--leak-check=yes",
+	"--suppressions=/etc/nginx/valgrind.supp",
 }
 
 func nginxExecCommand(args ...string) *exec.Cmd {
