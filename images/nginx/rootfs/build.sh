@@ -94,6 +94,7 @@ clean-install \
   authbind \
   dumb-init \
   gdb \
+  valgrind \
   || exit 1
 
 if [[ ${ARCH} == "x86_64" ]]; then
