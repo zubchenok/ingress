@@ -434,16 +434,12 @@ Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-980-CORRELATION.conf
 Include /etc/nginx/owasp-modsecurity-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
 " > /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
 
-# download ngx_debug_pool
-cd "$BUILD_PATH"
-git clone --depth=1 https://github.com/chobits/ngx_debug_pool.git
-
 # build nginx
 cd "$BUILD_PATH/nginx-$NGINX_VERSION"
 
 # apply Nginx patches
 patch -p1 < /patches/openresty-ssl_cert_cb_yield.patch
-patch -p1 < "$BUILD_PATH/ngx_debug_pool/debug_pool.patch"
+patch -p1 < /patches/nginx-1.13.8-no_pool.patch
 
 WITH_FLAGS="--with-debug \
   --with-compat \
@@ -502,8 +498,7 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --add-dynamic-module=$BUILD_PATH/ModSecurity-nginx-$MODSECURITY_VERSION \
   --add-dynamic-module=$BUILD_PATH/ngx_http_geoip2_module-${GEOIP2_VERSION} \
   --add-module=$BUILD_PATH/nginx_ajp_module-${NGINX_AJP_VERSION} \
-  --add-module=$BUILD_PATH/ngx_brotli \
-  --add-module=$BUILD_PATH/ngx_debug_pool"
+  --add-module=$BUILD_PATH/ngx_brotli"
 
 ./configure \
   --prefix=/usr/share/nginx \
