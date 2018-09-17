@@ -440,7 +440,6 @@ cd "$BUILD_PATH/nginx-$NGINX_VERSION"
 
 # apply Nginx patches
 patch -p1 < /patches/openresty-ssl_cert_cb_yield.patch
-patch -p1 < /patches/nginx-1.13.8-no_pool.patch
 
 WITH_FLAGS="--with-debug \
   --with-compat \
@@ -501,7 +500,7 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --add-module=$BUILD_PATH/nginx_ajp_module-${NGINX_AJP_VERSION} \
   --add-module=$BUILD_PATH/ngx_brotli"
 
-./configure \
+NGX_DEBUG_PALLOC=1 ./configure \
   --prefix=/usr/share/nginx \
   --conf-path=/etc/nginx/nginx.conf \
   --modules-path=/etc/nginx/modules \
