@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # 0.0.0 shouldn't clobber any released builds
-TAG ?= 0.63-slim-valgrind-friendly
+TAG ?= 0.63-with-nginx-1.13.6
 REGISTRY ?= quay.io/kubernetes-ingress-controller
 ARCH ?= $(shell go env GOARCH)
 DOCKER ?= docker

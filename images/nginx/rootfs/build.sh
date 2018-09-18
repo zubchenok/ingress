@@ -19,14 +19,14 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-export NGINX_VERSION=1.15.3
-export NDK_VERSION=0.3.1rc1
+export NGINX_VERSION=1.13.6
+export NDK_VERSION=0.3.0
 export SETMISC_VERSION=0.32
 export STICKY_SESSIONS_VERSION=08a395c66e42
 export MORE_HEADERS_VERSION=0.33
 export NGINX_DIGEST_AUTH=274490cec649e7300fea97fed13d84e596bbc0ce
 export NGINX_SUBSTITUTIONS=bc58cb11844bc42735bbaef7085ea86ace46d05b
-export LUA_NGX_VERSION=e94f2e5d64daa45ff396e262d8dab8e56f5f10e0
+export LUA_NGX_VERSION=0.10.13
 export LUA_UPSTREAM_VERSION=0.07
 export COOKIE_FLAG_VERSION=1.1.0
 export NGINX_INFLUXDB_VERSION=f20cfb2458c338f162132f5a21eb021e2cbe6383
@@ -137,10 +137,10 @@ mkdir --verbose -p "$BUILD_PATH"
 cd "$BUILD_PATH"
 
 # download, verify and extract the source files
-get_src 9391fb91c3e2ebd040a4e3ac2b2f0893deb6232edc30a8e16fcc9c3fa9d6be85 \
+get_src 8512fc6f986a20af293b61f33b0e72f64a72ea5b1acbcc790c4c4e2d6f63f8f8 \
         "http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz"
 
-get_src 49f50d4cd62b166bc1aaf712febec5e028d9f187cedbc27a610dfd01bdde2d36 \
+get_src 88e05a99a8a7419066f5ae75966fb1efc409bad4522d14986da074554ae61619 \
         "https://github.com/simpl/ngx_devel_kit/archive/v$NDK_VERSION.tar.gz"
 
 get_src f1ad2459c4ee6a61771aa84f77871f4bfe42943a4aa4c30c62ba3f981f52c201 \
@@ -161,7 +161,7 @@ get_src 618551948ab14cac51d6e4ad00452312c7b09938f59ebff4f93875013be31f2d \
 get_src 9915ad1cf0734cc5b357b0d9ea92fec94764b4bf22f4dce185cbd65feda30ec1 \
         "https://github.com/AirisX/nginx_cookie_flag_module/archive/v$COOKIE_FLAG_VERSION.tar.gz"
 
-get_src 027a1f1ddb35164c720451869fc5ea9095abaf70af02a1b17f59e0772c0cfec0 \
+get_src ecea8c3d7f69dd48c6132498ddefb5d83ba9f387fa3d4da14e2abeacdfc8a3ee \
         "https://github.com/openresty/lua-nginx-module/archive/$LUA_NGX_VERSION.tar.gz"
 
 get_src 2a69815e4ae01aa8b170941a8e1a10b6f6a9aab699dee485d58f021dd933829a \
