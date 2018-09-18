@@ -88,7 +88,6 @@ clean-install \
   authbind \
   dumb-init \
   gdb \
-  valgrind \
   || exit 1
 
 if [[ ${ARCH} == "x86_64" ]]; then
@@ -217,7 +216,7 @@ fi
 # luajit is not available on ppc64le and s390x
 if [[ (${ARCH} != "ppc64le") && (${ARCH} != "s390x") ]]; then
   cd "$BUILD_PATH/luajit2-2.1-20180420"
-  make CCDEBUG=-g Q= XCFLAGS='-DLUA_USE_APICHECK -DLUA_USE_ASSERT -DLUAJIT_USE_VALGRIND'
+  make CCDEBUG=-g
   make install
 
   export LUAJIT_LIB=/usr/local/lib
@@ -340,7 +339,7 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --add-module=$BUILD_PATH/nginx_ajp_module-${NGINX_AJP_VERSION} \
   --add-module=$BUILD_PATH/ngx_brotli"
 
-NGX_DEBUG_PALLOC=1 ./configure \
+./configure \
   --prefix=/usr/share/nginx \
   --conf-path=/etc/nginx/nginx.conf \
   --modules-path=/etc/nginx/modules \
