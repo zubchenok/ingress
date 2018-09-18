@@ -26,7 +26,7 @@ export STICKY_SESSIONS_VERSION=08a395c66e42
 export MORE_HEADERS_VERSION=0.33
 export NGINX_DIGEST_AUTH=274490cec649e7300fea97fed13d84e596bbc0ce
 export NGINX_SUBSTITUTIONS=bc58cb11844bc42735bbaef7085ea86ace46d05b
-export LUA_NGX_VERSION=v0.10.13
+export LUA_NGX_VERSION=0.10.13
 export LUA_UPSTREAM_VERSION=0.07
 export COOKIE_FLAG_VERSION=1.1.0
 export NGINX_INFLUXDB_VERSION=f20cfb2458c338f162132f5a21eb021e2cbe6383
@@ -161,7 +161,7 @@ get_src 9915ad1cf0734cc5b357b0d9ea92fec94764b4bf22f4dce185cbd65feda30ec1 \
         "https://github.com/AirisX/nginx_cookie_flag_module/archive/v$COOKIE_FLAG_VERSION.tar.gz"
 
 get_src ecea8c3d7f69dd48c6132498ddefb5d83ba9f387fa3d4da14e2abeacdfc8a3ee \
-        "https://github.com/openresty/lua-nginx-module/archive/$LUA_NGX_VERSION.tar.gz"
+        "https://github.com/openresty/lua-nginx-module/archive/v$LUA_NGX_VERSION.tar.gz"
 
 get_src 2a69815e4ae01aa8b170941a8e1a10b6f6a9aab699dee485d58f021dd933829a \
         "https://github.com/openresty/lua-upstream-nginx-module/archive/v$LUA_UPSTREAM_VERSION.tar.gz"
