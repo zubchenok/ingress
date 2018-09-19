@@ -24,6 +24,7 @@ RUN clean-install \
   dumb-init
 
 COPY . /
+COPY valgrind.supp /etc/nginx/
 
 # Fix permission during the build to avoid issues at runtime
 # with volumes (custom templates)

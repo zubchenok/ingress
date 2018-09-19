@@ -21,11 +21,13 @@ function _M.init_worker()
 end
 
 function _M.enqueue(func, ...)
+  --[[
   if #queue >= MAX_QUEUE_SIZE then
     return "deferred timer queue full"
   end
 
   table.insert(queue, { func = func, args = {...} })
+  --]]
 end
 
 if _TEST then
