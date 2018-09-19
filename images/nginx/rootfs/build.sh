@@ -75,6 +75,7 @@ clean-install \
   util-linux \
   lua5.1 liblua5.1-0 liblua5.1-dev \
   lmdb-utils \
+  libjemalloc1 libjemalloc-dev \
   wget \
   libcurl4-openssl-dev \
   libprotobuf-dev protobuf-compiler \
@@ -85,6 +86,7 @@ clean-install \
   python \
   luarocks \
   libmaxminddb-dev \
+  libatomic-ops-dev \
   authbind \
   dumb-init \
   gdb \
@@ -314,13 +316,14 @@ CC_OPT="-g -Og -fPIE -fstack-protector-strong \
   -Werror=format-security \
   -Wno-deprecated-declarations \
   -fno-strict-aliasing \
+  -Wdate-time \
   -D_FORTIFY_SOURCE=2 \
   --param=ssp-buffer-size=4 \
   -DTCP_FASTOPEN=23 \
   -fPIC \
   -Wno-cast-function-type"
 
-LD_OPT="-fPIE -fPIC -pie -Wl,-z,relro -Wl,-z,now"
+LD_OPT="-ljemalloc -fPIE -fPIC -pie -Wl,-z,relro -Wl,-z,now"
 
 if [[ ${ARCH} == "x86_64" ]]; then
   CC_OPT+=' -m64 -mtune=native'
@@ -360,6 +363,7 @@ WITH_MODULES="--add-module=$BUILD_PATH/ngx_devel_kit-$NDK_VERSION \
   --without-http_scgi_module \
   --with-cc-opt="${CC_OPT}" \
   --with-ld-opt="${LD_OPT}" \
+  --with-libatomic \
   --user=www-data \
   --group=www-data \
   ${WITH_MODULES}
