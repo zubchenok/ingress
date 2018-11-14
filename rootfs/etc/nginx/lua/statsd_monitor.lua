@@ -1,6 +1,7 @@
 local statsd = require('statsd')
 local defer_to_timer = require("defer_to_timer")
 local split = require("util.split")
+local util = require("util")
 
 local _M = {}
 
@@ -33,7 +34,8 @@ local function send_response_data(upstream_state, client_state)
   statsd.increment('ingress.nginx.client.response', 1, {
     status=client_state.status,
     status_class=status_class,
-    upstream_name=client_state.upstream_name
+    upstream_name=client_state.upstream_name,
+    deploy_stage=client_state.deploy_stage
   })
 
   statsd.histogram('ingress.nginx.client.request_time', client_state.request_time, {
@@ -57,6 +59,8 @@ function _M.call()
     return nil, rt_err
   end
 
+  local deploy_stage = util.get_request_header("X-Shopify-Stage")
+
   local err = defer_to_timer.enqueue(send_response_data, {
       status=status,
       addr=addrs,
@@ -64,7 +68,8 @@ function _M.call()
     }, {
       status=ngx.var.status,
       request_time=ngx.var.request_time,
-      upstream_name=ngx.var.proxy_upstream_name
+      upstream_name=ngx.var.proxy_upstream_name,
+      deploy_stage=deploy_stage
     })
 
   if err then

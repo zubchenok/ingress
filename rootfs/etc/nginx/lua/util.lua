@@ -42,6 +42,16 @@ function _M.md5_digest(message)
   return hash_digest(resty_md5, message)
 end
 
+function _M.convert_header_name_to_var_name(header_name)
+  local var_name = string.gsub(header_name, "-", "_")
+  return "http_" .. string.lower(var_name)
+end
+
+-- given a header name, get the value of that header
+function _M.get_request_header(header_name)
+  return ngx.var[_M.convert_header_name_to_var_name(header_name)]
+end
+
 -- given an Nginx variable i.e $request_uri
 -- it returns value of ngx.var[request_uri]
 function _M.lua_ngx_var(ngx_var)
