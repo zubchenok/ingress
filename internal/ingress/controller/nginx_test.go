@@ -28,6 +28,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	apiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/ingress-nginx/internal/ingress"
 )
@@ -204,9 +205,31 @@ func TestConfigureDynamically(t *testing.T) {
 		},
 	}}
 
+	controllerPods := []*apiv1.Pod{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "ingress-1",
+				Namespace: apiv1.NamespaceDefault,
+				Labels: map[string]string{
+					"foo": "bar",
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "ingress-2",
+				Namespace: apiv1.NamespaceDefault,
+				Labels: map[string]string{
+					"foo": "bar",
+				},
+			},
+		},
+	}
+
 	commonConfig := &ingress.Configuration{
-		Backends: backends,
-		Servers:  servers,
+		Backends:       backends,
+		Servers:        servers,
+		ControllerPods: controllerPods,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -221,12 +244,26 @@ func TestConfigureDynamically(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := string(b)
-		if strings.Contains(body, "target") {
-			t.Errorf("unexpected target reference in JSON content: %v", body)
-		}
 
-		if !strings.Contains(body, "service") {
-			t.Errorf("service reference should be present in JSON content: %v", body)
+		switch r.URL.Path {
+		case "/configuration/backends":
+			{
+				if strings.Contains(body, "target") {
+					t.Errorf("unexpected target reference in JSON content: %v", body)
+				}
+
+				if !strings.Contains(body, "service") {
+					t.Errorf("service reference should be present in JSON content: %v", body)
+				}
+			}
+		case "/configuration/general":
+			{
+				if !strings.Contains(body, "controllerPodsCount") {
+					t.Errorf("controllerPodsCount should be present in JSON content: %v", body)
+				}
+			}
+		default:
+			t.Errorf("unknown request to %s", r.URL.Path)
 		}
 
 	}))

@@ -969,7 +969,7 @@ func TestWriteSSLSessionTicketKey(t *testing.T) {
 	}
 }
 
-func TestListControllerPods(t *testing.T) {
+func TestListRunningControllerPods(t *testing.T) {
 	os.Setenv("POD_NAMESPACE", "testns")
 	os.Setenv("POD_NAME", "ingress-1")
 
@@ -1024,7 +1024,7 @@ func TestListControllerPods(t *testing.T) {
 	}
 	s.listers.Pod.Add(pod)
 
-	pods := s.ListControllerPods()
+	pods := s.ListRunningControllerPods()
 	if s := len(pods); s != 2 {
 		t.Errorf("Expected 1 controller Pods but got %v", s)
 	}
