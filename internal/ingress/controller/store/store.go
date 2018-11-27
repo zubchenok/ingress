@@ -79,8 +79,8 @@ type Storer interface {
 	// ListIngresses returns a list of all Ingresses in the store.
 	ListIngresses() []*ingress.Ingress
 
-	// ListControllerPods returns a list of ingress-nginx controller Pods.
-	ListControllerPods() []*corev1.Pod
+	// ListRunningControllerPods returns a list of Running ingress-nginx controller Pods.
+	ListRunningControllerPods() []*corev1.Pod
 
 	// GetLocalSSLCert returns the local copy of a SSLCert
 	GetLocalSSLCert(name string) (*ingress.SSLCert, error)
@@ -287,12 +287,10 @@ func New(checkOCSP bool,
 	store.informers.Pod = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (k8sruntime.Object, error) {
-
 				options.LabelSelector = labelSelector.String()
 				return client.CoreV1().Pods(store.pod.Namespace).List(options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-
 				options.LabelSelector = labelSelector.String()
 				return client.CoreV1().Pods(store.pod.Namespace).Watch(options)
 			},
@@ -836,8 +834,8 @@ func (s k8sStore) Run(stopCh chan struct{}) {
 	}
 }
 
-// ListControllerPods returns a list of ingress-nginx controller Pods
-func (s k8sStore) ListControllerPods() []*corev1.Pod {
+// ListRunningControllerPods returns a list of Running ingress-nginx controller Pods
+func (s k8sStore) ListRunningControllerPods() []*corev1.Pod {
 	var pods []*corev1.Pod
 
 	for _, i := range s.listers.Pod.List() {
