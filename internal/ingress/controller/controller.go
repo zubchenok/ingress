@@ -939,11 +939,16 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 		un := du.Name
 
 		if ing.Spec.Backend != nil {
-			defUpstream := fmt.Sprintf("%v-%v-%v", ing.Namespace, ing.Spec.Backend.ServiceName, ing.Spec.Backend.ServicePort.String())
+			defUpstream := upstreamName(ing.Namespace, ing.Spec.Backend.ServiceName, ing.Spec.Backend.ServicePort)
 
 			if backendUpstream, ok := upstreams[defUpstream]; ok {
 				// use backend specified in Ingress as the default backend for all its rules
 				un = backendUpstream.Name
+
+				if backendUpstream.NoServer {
+				  glog.Infof("Ingress %v with backend %v is not eligible to use the catch-all server. Trying next ingress", ingKey, un)
+				  continue
+				}
 
 				// special "catch all" case, Ingress with a backend but no rule
 				defLoc := servers[defServerName].Locations[0]
