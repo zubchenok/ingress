@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/eapache/channels"
-	"github.com/golang/glog"
 
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
@@ -41,6 +40,7 @@ import (
 	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
 
 	"k8s.io/ingress-nginx/internal/file"
 	"k8s.io/ingress-nginx/internal/ingress"
@@ -72,9 +72,6 @@ type Storer interface {
 
 	// GetServiceEndpoints returns the Endpoints of a Service matching key.
 	GetServiceEndpoints(key string) (*corev1.Endpoints, error)
-
-	// GetIngress returns the Ingress matching key.
-	GetIngress(key string) (*extensions.Ingress, error)
 
 	// ListIngresses returns a list of all Ingresses in the store.
 	ListIngresses() []*ingress.Ingress
@@ -132,13 +129,13 @@ type Informer struct {
 
 // Lister contains object listers (stores).
 type Lister struct {
-	Ingress           IngressLister
-	Service           ServiceLister
-	Endpoint          EndpointLister
-	Secret            SecretLister
-	ConfigMap         ConfigMapLister
-	IngressAnnotation IngressAnnotationsLister
-	Pod               PodLister
+	Ingress               IngressLister
+	Service               ServiceLister
+	Endpoint              EndpointLister
+	Secret                SecretLister
+	ConfigMap             ConfigMapLister
+	IngressWithAnnotation IngressWithAnnotationsLister
+	Pod                   PodLister
 }
 
 // NotExistsError is returned when an object does not exist in a local store.
@@ -250,7 +247,7 @@ func New(checkOCSP bool,
 	}
 
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(glog.Infof)
+	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&clientcorev1.EventSinkImpl{
 		Interface: client.CoreV1().Events(namespace),
 	})
@@ -261,7 +258,7 @@ func New(checkOCSP bool,
 	// k8sStore fulfills resolver.Resolver interface
 	store.annotations = annotations.NewAnnotationExtractor(store)
 
-	store.listers.IngressAnnotation.Store = cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	store.listers.IngressWithAnnotation.Store = cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
 
 	// create informers factory, enable and assign required informers
 	infFactory := informers.NewSharedInformerFactoryWithOptions(client, resyncPeriod,
@@ -308,12 +305,12 @@ func New(checkOCSP bool,
 			ing := obj.(*extensions.Ingress)
 			if !class.IsValid(ing) {
 				a, _ := parser.GetStringAnnotation(class.IngressKey, ing)
-				glog.Infof("ignoring add for ingress %v based on annotation %v with value %v", ing.Name, class.IngressKey, a)
+				klog.Infof("ignoring add for ingress %v based on annotation %v with value %v", ing.Name, class.IngressKey, a)
 				return
 			}
 			recorder.Eventf(ing, corev1.EventTypeNormal, "CREATE", fmt.Sprintf("Ingress %s/%s", ing.Namespace, ing.Name))
 
-			store.extractAnnotations(ing)
+			store.syncIngress(ing)
 			store.updateSecretIngressMap(ing)
 			store.syncSecrets(ing)
 
@@ -328,22 +325,22 @@ func New(checkOCSP bool,
 				// If we reached here it means the ingress was deleted but its final state is unrecorded.
 				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 				if !ok {
-					glog.Errorf("couldn't get object from tombstone %#v", obj)
+					klog.Errorf("couldn't get object from tombstone %#v", obj)
 					return
 				}
 				ing, ok = tombstone.Obj.(*extensions.Ingress)
 				if !ok {
-					glog.Errorf("Tombstone contained object that is not an Ingress: %#v", obj)
+					klog.Errorf("Tombstone contained object that is not an Ingress: %#v", obj)
 					return
 				}
 			}
 			if !class.IsValid(ing) {
-				glog.Infof("ignoring delete for ingress %v based on annotation %v", ing.Name, class.IngressKey)
+				klog.Infof("ignoring delete for ingress %v based on annotation %v", ing.Name, class.IngressKey)
 				return
 			}
 			recorder.Eventf(ing, corev1.EventTypeNormal, "DELETE", fmt.Sprintf("Ingress %s/%s", ing.Namespace, ing.Name))
 
-			store.listers.IngressAnnotation.Delete(ing)
+			store.listers.IngressWithAnnotation.Delete(ing)
 
 			key := k8s.MetaNamespaceKey(ing)
 			store.secretIngressMap.Delete(key)
@@ -359,16 +356,16 @@ func New(checkOCSP bool,
 			validOld := class.IsValid(oldIng)
 			validCur := class.IsValid(curIng)
 			if !validOld && validCur {
-				glog.Infof("creating ingress %v based on annotation %v", curIng.Name, class.IngressKey)
+				klog.Infof("creating ingress %v based on annotation %v", curIng.Name, class.IngressKey)
 				recorder.Eventf(curIng, corev1.EventTypeNormal, "CREATE", fmt.Sprintf("Ingress %s/%s", curIng.Namespace, curIng.Name))
 			} else if validOld && !validCur {
-				glog.Infof("removing ingress %v based on annotation %v", curIng.Name, class.IngressKey)
+				klog.Infof("removing ingress %v based on annotation %v", curIng.Name, class.IngressKey)
 				recorder.Eventf(curIng, corev1.EventTypeNormal, "DELETE", fmt.Sprintf("Ingress %s/%s", curIng.Namespace, curIng.Name))
 			} else if validCur && !reflect.DeepEqual(old, cur) {
 				recorder.Eventf(curIng, corev1.EventTypeNormal, "UPDATE", fmt.Sprintf("Ingress %s/%s", curIng.Namespace, curIng.Name))
 			}
 
-			store.extractAnnotations(curIng)
+			store.syncIngress(curIng)
 			store.updateSecretIngressMap(curIng)
 			store.syncSecrets(curIng)
 
@@ -390,14 +387,14 @@ func New(checkOCSP bool,
 
 			// find references in ingresses and update local ssl certs
 			if ings := store.secretIngressMap.Reference(key); len(ings) > 0 {
-				glog.Infof("secret %v was added and it is used in ingress annotations. Parsing...", key)
+				klog.Infof("secret %v was added and it is used in ingress annotations. Parsing...", key)
 				for _, ingKey := range ings {
-					ing, err := store.GetIngress(ingKey)
+					ing, err := store.getIngress(ingKey)
 					if err != nil {
-						glog.Errorf("could not find Ingress %v in local store", ingKey)
+						klog.Errorf("could not find Ingress %v in local store", ingKey)
 						continue
 					}
-					store.extractAnnotations(ing)
+					store.syncIngress(ing)
 					store.syncSecrets(ing)
 				}
 				updateCh.In() <- Event{
@@ -417,14 +414,14 @@ func New(checkOCSP bool,
 
 				// find references in ingresses and update local ssl certs
 				if ings := store.secretIngressMap.Reference(key); len(ings) > 0 {
-					glog.Infof("secret %v was updated and it is used in ingress annotations. Parsing...", key)
+					klog.Infof("secret %v was updated and it is used in ingress annotations. Parsing...", key)
 					for _, ingKey := range ings {
-						ing, err := store.GetIngress(ingKey)
+						ing, err := store.getIngress(ingKey)
 						if err != nil {
-							glog.Errorf("could not find Ingress %v in local store", ingKey)
+							klog.Errorf("could not find Ingress %v in local store", ingKey)
 							continue
 						}
-						store.extractAnnotations(ing)
+						store.syncIngress(ing)
 						store.syncSecrets(ing)
 					}
 					updateCh.In() <- Event{
@@ -440,12 +437,12 @@ func New(checkOCSP bool,
 				// If we reached here it means the secret was deleted but its final state is unrecorded.
 				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 				if !ok {
-					glog.Errorf("couldn't get object from tombstone %#v", obj)
+					klog.Errorf("couldn't get object from tombstone %#v", obj)
 					return
 				}
 				sec, ok = tombstone.Obj.(*corev1.Secret)
 				if !ok {
-					glog.Errorf("Tombstone contained object that is not a Secret: %#v", obj)
+					klog.Errorf("Tombstone contained object that is not a Secret: %#v", obj)
 					return
 				}
 			}
@@ -456,14 +453,14 @@ func New(checkOCSP bool,
 
 			// find references in ingresses
 			if ings := store.secretIngressMap.Reference(key); len(ings) > 0 {
-				glog.Infof("secret %v was deleted and it is used in ingress annotations. Parsing...", key)
+				klog.Infof("secret %v was deleted and it is used in ingress annotations. Parsing...", key)
 				for _, ingKey := range ings {
-					ing, err := store.GetIngress(ingKey)
+					ing, err := store.getIngress(ingKey)
 					if err != nil {
-						glog.Errorf("could not find Ingress %v in local store", ingKey)
+						klog.Errorf("could not find Ingress %v in local store", ingKey)
 						continue
 					}
-					store.extractAnnotations(ing)
+					store.syncIngress(ing)
 				}
 				updateCh.In() <- Event{
 					Type: DeleteEvent,
@@ -525,15 +522,15 @@ func New(checkOCSP bool,
 						store.setConfig(cm)
 					}
 
-					ings := store.listers.IngressAnnotation.List()
+					ings := store.listers.IngressWithAnnotation.List()
 					for _, ingKey := range ings {
 						key := k8s.MetaNamespaceKey(ingKey)
-						ing, err := store.GetIngress(key)
+						ing, err := store.getIngress(key)
 						if err != nil {
-							glog.Errorf("could not find Ingress %v in local store: %v", key, err)
+							klog.Errorf("could not find Ingress %v in local store: %v", key, err)
 							continue
 						}
-						store.extractAnnotations(ing)
+						store.syncIngress(ing)
 					}
 
 					updateCh.In() <- Event{
@@ -584,24 +581,41 @@ func New(checkOCSP bool,
 	ns, name, _ := k8s.ParseNameNS(configmap)
 	cm, err := client.CoreV1().ConfigMaps(ns).Get(name, metav1.GetOptions{})
 	if err != nil {
-		glog.Warningf("Unexpected error reading configuration configmap: %v", err)
+		klog.Warningf("Unexpected error reading configuration configmap: %v", err)
 	}
 
 	store.setConfig(cm)
 	return store
 }
 
-// extractAnnotations parses ingress annotations converting the value of the
-// annotation to a go struct and also information about the referenced secrets
-func (s *k8sStore) extractAnnotations(ing *extensions.Ingress) {
+// syncIngress parses ingress annotations converting the value of the
+// annotation to a go struct
+func (s *k8sStore) syncIngress(ing *extensions.Ingress) {
 	key := k8s.MetaNamespaceKey(ing)
-	glog.V(3).Infof("updating annotations information for ingress %v", key)
+	klog.V(3).Infof("updating annotations information for ingress %v", key)
 
-	anns := s.annotations.Extract(ing)
+	copyIng := &extensions.Ingress{}
+	ing.ObjectMeta.DeepCopyInto(&copyIng.ObjectMeta)
+	ing.Spec.DeepCopyInto(&copyIng.Spec)
 
-	err := s.listers.IngressAnnotation.Update(anns)
+	for ri, rule := range copyIng.Spec.Rules {
+		if rule.HTTP == nil {
+			continue
+		}
+
+		for pi, path := range rule.HTTP.Paths {
+			if path.Path == "" {
+				copyIng.Spec.Rules[ri].HTTP.Paths[pi].Path = "/"
+			}
+		}
+	}
+
+	err := s.listers.IngressWithAnnotation.Update(&ingress.Ingress{
+		Ingress:           *copyIng,
+		ParsedAnnotations: s.annotations.Extract(ing),
+	})
 	if err != nil {
-		glog.Error(err)
+		klog.Error(err)
 	}
 }
 
@@ -609,7 +623,7 @@ func (s *k8sStore) extractAnnotations(ing *extensions.Ingress) {
 // references in secretIngressMap.
 func (s *k8sStore) updateSecretIngressMap(ing *extensions.Ingress) {
 	key := k8s.MetaNamespaceKey(ing)
-	glog.V(3).Infof("updating references to secrets for ingress %v", key)
+	klog.V(3).Infof("updating references to secrets for ingress %v", key)
 
 	// delete all existing references first
 	s.secretIngressMap.Delete(key)
@@ -635,7 +649,7 @@ func (s *k8sStore) updateSecretIngressMap(ing *extensions.Ingress) {
 	for _, ann := range secretAnnotations {
 		secrKey, err := objectRefAnnotationNsKey(ann, ing)
 		if err != nil && !errors.IsMissingAnnotations(err) {
-			glog.Errorf("error reading secret reference in annotation %q: %s", ann, err)
+			klog.Errorf("error reading secret reference in annotation %q: %s", ann, err)
 			continue
 		}
 		if secrKey != "" {
@@ -651,7 +665,7 @@ func (s *k8sStore) updateSecretIngressMap(ing *extensions.Ingress) {
 // 'namespace/name' key from the given annotation name.
 func objectRefAnnotationNsKey(ann string, ing *extensions.Ingress) (string, error) {
 	annValue, err := parser.GetStringAnnotation(ann, ing)
-	if annValue == "" {
+	if err != nil {
 		return "", err
 	}
 
@@ -697,57 +711,26 @@ func (s k8sStore) GetService(key string) (*corev1.Service, error) {
 	return s.listers.Service.ByKey(key)
 }
 
-// GetIngress returns the Ingress matching key.
-func (s k8sStore) GetIngress(key string) (*extensions.Ingress, error) {
-	return s.listers.Ingress.ByKey(key)
+// getIngress returns the Ingress matching key.
+func (s k8sStore) getIngress(key string) (*extensions.Ingress, error) {
+	ing, err := s.listers.IngressWithAnnotation.ByKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ing.Ingress, nil
 }
 
 // ListIngresses returns the list of Ingresses
 func (s k8sStore) ListIngresses() []*ingress.Ingress {
 	// filter ingress rules
-	var ingresses []*ingress.Ingress
-	for _, item := range s.listers.Ingress.List() {
-		ing := item.(*extensions.Ingress)
-		if !class.IsValid(ing) {
-			continue
-		}
-
-		ingKey := k8s.MetaNamespaceKey(ing)
-		anns, err := s.getIngressAnnotations(ingKey)
-		if err != nil {
-			glog.Errorf("Error getting Ingress annotations %q: %v", ingKey, err)
-
-		}
-
-		for ri, rule := range ing.Spec.Rules {
-			if rule.HTTP == nil {
-				continue
-			}
-
-			for pi, path := range rule.HTTP.Paths {
-				if path.Path == "" {
-					ing.Spec.Rules[ri].HTTP.Paths[pi].Path = "/"
-				}
-			}
-		}
-
-		ingresses = append(ingresses, &ingress.Ingress{
-			Ingress:           *ing,
-			ParsedAnnotations: anns,
-		})
+	ingresses := make([]*ingress.Ingress, 0)
+	for _, item := range s.listers.IngressWithAnnotation.List() {
+		ing := item.(*ingress.Ingress)
+		ingresses = append(ingresses, ing)
 	}
 
 	return ingresses
-}
-
-// getIngressAnnotations returns the parsed annotations of an Ingress matching key.
-func (s k8sStore) getIngressAnnotations(key string) (*annotations.Ingress, error) {
-	ia, err := s.listers.IngressAnnotation.ByKey(key)
-	if err != nil {
-		return &annotations.Ingress{}, err
-	}
-
-	return ia, nil
 }
 
 // GetLocalSSLCert returns the local copy of a SSLCert
@@ -792,18 +775,18 @@ func (s k8sStore) writeSSLSessionTicketKey(cmap *corev1.ConfigMap, fileName stri
 
 		// 81 used instead of 80 because of padding
 		if !(ticketBytes == 48 || ticketBytes == 81) {
-			glog.Warningf("ssl-session-ticket-key must contain either 48 or 80 bytes")
+			klog.Warningf("ssl-session-ticket-key must contain either 48 or 80 bytes")
 		}
 
 		decodedTicket, err := base64.StdEncoding.DecodeString(ticketString)
 		if err != nil {
-			glog.Errorf("unexpected error decoding ssl-session-ticket-key: %v", err)
+			klog.Errorf("unexpected error decoding ssl-session-ticket-key: %v", err)
 			return
 		}
 
 		err = ioutil.WriteFile(fileName, decodedTicket, file.ReadWriteByUser)
 		if err != nil {
-			glog.Errorf("unexpected error writing ssl-session-ticket-key to %s: %v", fileName, err)
+			klog.Errorf("unexpected error writing ssl-session-ticket-key to %s: %v", fileName, err)
 			return
 		}
 
