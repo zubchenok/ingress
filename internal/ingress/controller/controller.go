@@ -97,6 +97,8 @@ type Configuration struct {
 	SyncRateLimit float32
 
 	DynamicCertificatesEnabled bool
+
+	DisableCatchAll bool
 }
 
 // GetPublishService returns the Service used to set the load-balancer status of Ingresses.
@@ -1130,6 +1132,11 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 			klog.Warningf("Conflicting hostname (%v) and alias (%v). Removing alias to avoid conflicts.", host, alias)
 			servers[host].Alias = ""
 		}
+	}
+
+	if n.cfg.DisableCatchAll {
+		delete(servers, defServerName)
+		klog.V(2).Infof("Removing catch-all server because of --disable-cache-all option")
 	}
 
 	return servers
