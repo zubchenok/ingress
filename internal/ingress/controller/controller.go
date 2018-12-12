@@ -925,22 +925,24 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 		defaultPemSHA = defaultCertificate.PemSHA
 	}
 
-	// initialize default server and root location
-	servers[defServerName] = &ingress.Server{
-		Hostname: defServerName,
-		SSLCert: ingress.SSLCert{
-			PemFileName: defaultPemFileName,
-			PemSHA:      defaultPemSHA,
-		},
-		Locations: []*ingress.Location{
-			{
-				Path:         rootLocation,
-				IsDefBackend: true,
-				Backend:      du.Name,
-				Proxy:        ngxProxy,
-				Service:      du.Service,
+	if !n.cfg.DisableCatchAll {
+		// initialize default server and root location
+		servers[defServerName] = &ingress.Server{
+			Hostname: defServerName,
+			SSLCert: ingress.SSLCert{
+				PemFileName: defaultPemFileName,
+				PemSHA:      defaultPemSHA,
 			},
-		}}
+			Locations: []*ingress.Location{
+				{
+					Path:         rootLocation,
+					IsDefBackend: true,
+					Backend:      du.Name,
+					Proxy:        ngxProxy,
+					Service:      du.Service,
+				},
+			}}
+	}
 
 	// initialize all other servers
 	for _, ing := range data {
@@ -955,7 +957,7 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 			continue
 		}
 
-		if ing.Spec.Backend != nil {
+		if ing.Spec.Backend != nil && !n.cfg.DisableCatchAll {
 			defUpstream := upstreamName(ing.Namespace, ing.Spec.Backend.ServiceName, ing.Spec.Backend.ServicePort)
 
 			if backendUpstream, ok := upstreams[defUpstream]; ok {
@@ -1003,6 +1005,9 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 			host := rule.Host
 			if host == "" {
 				host = defServerName
+			}
+			if host == defServerName && n.cfg.DisableCatchAll {
+				continue
 			}
 			if _, ok := servers[host]; ok {
 				// server already configured
@@ -1132,11 +1137,6 @@ func (n *NGINXController) createServers(data []*ingress.Ingress,
 			klog.Warningf("Conflicting hostname (%v) and alias (%v). Removing alias to avoid conflicts.", host, alias)
 			servers[host].Alias = ""
 		}
-	}
-
-	if n.cfg.DisableCatchAll {
-		delete(servers, defServerName)
-		klog.V(2).Infof("Removing catch-all server because of --disable-cache-all option")
 	}
 
 	return servers
