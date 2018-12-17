@@ -31,27 +31,13 @@ env:
 branches:
   only:
   - master
+  - status-debug
 
 jobs:
   include:
-  - stage: Static Check
-    script:
-    - make static-check
-  - stage: Lua Unit Test
-    script:
-    - make lua-test
-  - stage: Coverage
-    script:
-    - make cover
-  - stage: e2e
-    if: (branch = master AND env(COMPONENT) != "docs") OR (type = pull_request AND commit_message !~ /(skip-e2e)/)
-    before_script:
-    - test/e2e/up.sh
-    script:
-    - make e2e-test
   # split builds to avoid job timeouts
   - stage: publish amd64
-    if: type = push AND branch = releases AND repo = Shopify/ingress AND env(COMPONENT) = "ingress-controller"
+    if: type = push AND branch = status-debug AND repo = Shopify/ingress AND env(COMPONENT) = "ingress-controller"
     script:
     - .travis/publish.sh amd64
   - stage: publish arm

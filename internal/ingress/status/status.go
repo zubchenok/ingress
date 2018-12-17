@@ -359,6 +359,9 @@ func (s *statusSync) updateStatus(newIngressPoint []apiv1.LoadBalancerIngress) {
 	for _, ing := range ings {
 		curIPs := ing.Status.LoadBalancer.Ingress
 		sort.SliceStable(curIPs, lessLoadBalancerIngress(curIPs))
+
+		klog.Infof("XIYAR Ingress %v/%v: %+v", ing.Namespace, ing.Name, curIPs)
+		klog.Infof("XIYAR: %+v", newIngressPoint)
 		if ingressSliceEqual(curIPs, newIngressPoint) {
 			klog.V(3).Infof("skipping update of Ingress %v/%v (no change)", ing.Namespace, ing.Name)
 			continue
