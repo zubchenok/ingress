@@ -1341,7 +1341,7 @@ func isCanary(ing *ingress.Ingress) bool {
 	}
 
 	if strings.Contains(ing.Name, "canary") {
-		klog.Warning("Canary ingress %v/%v does not have canary annotation set to true.", ing.GetNamespace(), ing.GetName())
+		klog.Warningf("Canary ingress %v/%v does not have canary annotation set to true.", ing.GetNamespace(), ing.GetName())
 		return true
 	}
 
