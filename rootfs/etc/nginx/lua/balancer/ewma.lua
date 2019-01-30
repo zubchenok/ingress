@@ -7,9 +7,11 @@
 
 local util = require("util")
 local split = require("util.split")
+local cjson = require("cjson.safe")
 
 local DECAY_TIME = 10 -- this value is in seconds
 local PICK_SET_SIZE = 2
+local NEW_ENDPOINT_PENALTY_FACTOR = 1.0 -- 1 is no penalty
 
 local _M = { name = "ewma" }
 
@@ -32,6 +34,8 @@ local function get_or_update_ewma(self, upstream, rtt, update)
   if not update then
     return ewma, nil
   end
+
+  -- ngx.log(ngx.ERR, "UPDATING " .. tostring(upstream) .. " from " .. tostring(self.ewma[upstream]) .. " to " .. tostring(ewma) .. " rtt is " .. tostring(rtt))
 
   self.ewma[upstream] = ewma
   self.ewma_last_touched_at[upstream] = now
@@ -102,14 +106,48 @@ function _M.sync(self, backend)
   self.traffic_shaping_policy = backend.trafficShapingPolicy
   self.alternative_backends = backend.alternativeBackends
 
+  -- ngx.log(ngx.ERR, "\nSUMMARRY ------ \n\n" .. cjson.encode(self.ewma) .. "\n\n---------- ENDSUMMARY")
+
   local changed = not util.deep_compare(self.peers, backend.endpoints)
   if not changed then
     return
   end
 
+  -- Get the average for the ewma
+  local old_ewma_average = 0
+  for _, endpoint in ipairs(self.peers) do
+    local name = endpoint.address .. ":" .. endpoint.port
+    old_ewma_average = old_ewma_average + (self.ewma[name] or 0)
+  end
+  old_ewma_average = (old_ewma_average / #self.peers) or 0
+
+  -- Preserve the values for remaining endpoints and set the new ones to
+  -- the average times a constant
+  local new_ewma = {}
+  local new_ewma_last_touched_at = {}
+  local now = ngx.now()
+  for _, endpoint in ipairs(backend.endpoints) do
+    local name = endpoint.address .. ":" .. endpoint.port
+    if self.ewma[name] ~= nil then
+      -- Old endpoint
+      -- ngx.log(ngx.ERR, "Copying old endpoint " .. name .. "with wma " .. tostring(self.ewma[name]))
+      new_ewma[name] = self.ewma[name]
+      new_ewma_last_touched_at[name] = self.ewma_last_touched_at[name]
+    else
+      -- New endpoint
+      -- ngx.log(ngx.ERR, "Making new endpoint " .. name .. "with wma " .. tostring(old_ewma_average * NEW_ENDPOINT_PENALTY_FACTOR))
+      new_ewma[name] = old_ewma_average * NEW_ENDPOINT_PENALTY_FACTOR
+      new_ewma_last_touched_at[name] = now
+    end
+  end
+
   self.peers = backend.endpoints
-  self.ewma = {}
-  self.ewma_last_touched_at = {}
+  self.ewma = new_ewma
+  self.ewma_last_touched_at = new_ewma_last_touched_at
+
+  -- ngx.log(ngx.ERR, cjson.encode(self.peers))
+  -- ngx.log(ngx.ERR, cjson.encode(self.ewma))
+  -- ngx.log(ngx.ERR, cjson.encode(self.ewma_last_touched_at))
 end
 
 function _M.new(self, backend)
