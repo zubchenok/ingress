@@ -98,7 +98,7 @@ type Ingress struct {
 	LoadBalancing        string
 	UpstreamVhost        string
 	Whitelist            ipwhitelist.SourceRange
-	XForwardedPrefix     bool
+	XForwardedPrefix     string
 	SSLCiphers           string
 	Logs                 log.Config
 	LuaRestyWAF          luarestywaf.Config
