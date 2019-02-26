@@ -27,7 +27,8 @@ env:
     - GH_REF=github.com/kubernetes/ingress-nginx
 branches:
   only:
-    master
+  - master
+  - 0.23.0-rc2
 jobs:
   include:
     - stage: Static Check
@@ -48,7 +49,7 @@ jobs:
         - KUBECONFIG=$(cat /tmp/kubeconfig) make e2e-test
     # split builds to avoid job timeouts
     - stage: publish amd64
-      if: type = push AND branch = master AND repo = Shopify/ingress AND env(COMPONENT) = "ingress-controller"
+      if: type = push AND branch = 0.23.0-rc2 AND repo = Shopify/ingress AND env(COMPONENT) = "ingress-controller"
       script:
         - .travis/publish.sh amd64
     - stage: publish arm
