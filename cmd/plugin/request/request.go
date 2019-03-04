@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	ingressPodName     = "nginx-ingress-controller"
-	ingressServiceName = "ingress-nginx"
+	DefaultIngressDeploymentName     = "nginx-ingress-controller"
+	DefaultIngressServiceName = "ingress-nginx"
 )
 
 // NamedPodExec finds a pod with the given name, executes a command inside it, and returns stdout
@@ -51,15 +51,15 @@ func NamedPodExec(flags *genericclioptions.ConfigFlags, podName string, cmd []st
 	return "", fmt.Errorf("Pod %v not found in namespace %v", podName, util.GetNamespace(flags))
 }
 
-// IngressPodExec finds an ingress-nginx pod in the given namespace, executes a command inside it, and returns stdout
-func IngressPodExec(flags *genericclioptions.ConfigFlags, cmd []string) (string, error) {
-	ings, err := getIngressPods(flags)
+// DeploymentPodExec finds an pod for the given deployment in the given namespace, executes a command inside it, and returns stdout
+func DeploymentPodExec(flags *genericclioptions.ConfigFlags, deployment string, cmd []string) (string, error) {
+	ings, err := getDeploymentPods(flags, deployment)
 	if err != nil {
 		return "", err
 	}
 
 	if len(ings) == 0 {
-		return "", fmt.Errorf("No ingress-nginx pods found in namespace %v", util.GetNamespace(flags))
+		return "", fmt.Errorf("No pods for deployment %v found in namespace %v", deployment, util.GetNamespace(flags))
 	}
 
 	return podExec(flags, &ings[0], cmd)
@@ -87,11 +87,11 @@ func podExec(flags *genericclioptions.ConfigFlags, pod *apiv1.Pod, cmd []string)
 		Resource("pods").
 		Name(pod.Name).
 		Namespace(namespace).
-		SubResource("exec").
-		Param("container", ingressPodName)
+		SubResource("exec")
+		// Param("container", ingressPodName)
 
 	req.VersionedParams(&apiv1.PodExecOptions{
-		Container: ingressPodName,
+		// Container: ingressPodName,
 		Command:   cmd,
 		Stdin:     false,
 		Stdout:    true,
@@ -113,7 +113,7 @@ func podExec(flags *genericclioptions.ConfigFlags, pod *apiv1.Pod, cmd []string)
 	return stdout.String(), err
 }
 
-func getIngressPods(flags *genericclioptions.ConfigFlags) ([]apiv1.Pod, error) {
+func getDeploymentPods(flags *genericclioptions.ConfigFlags, deployment string) ([]apiv1.Pod, error) {
 	pods, err := getPods(flags)
 	if err != nil {
 		return make([]apiv1.Pod, 0), err
@@ -121,7 +121,7 @@ func getIngressPods(flags *genericclioptions.ConfigFlags) ([]apiv1.Pod, error) {
 
 	ingressPods := make([]apiv1.Pod, 0)
 	for _, pod := range pods {
-		if pod.Spec.Containers[0].Name == ingressPodName {
+		if pod.Spec.Containers[0].Name == deployment {
 			ingressPods = append(ingressPods, pod)
 		}
 	}
@@ -170,20 +170,23 @@ func GetIngressDefinitions(flags *genericclioptions.ConfigFlags, namespace strin
 	return pods.Items, nil
 }
 
-// GetIngressService finds and returns the ingress-nginx service definition
-func GetIngressService(flags *genericclioptions.ConfigFlags) (apiv1.Service, error) {
-	services, err := getServices(flags)
-	if err != nil {
-		return apiv1.Service{}, err
+// GetServiceByName finds and returns the service definition with the given name
+func GetServiceByName(flags *genericclioptions.ConfigFlags, name string, services *[]apiv1.Service) (apiv1.Service, error) {
+	if services == nil {
+		servicesArray, err := getServices(flags)
+		if err != nil {
+			return apiv1.Service{}, err
+		}
+		services = &servicesArray
 	}
-
-	for _, svc := range services {
-		if svc.Name == ingressServiceName {
+	
+	for _, svc := range *services {
+		if svc.Name == name {
 			return svc, nil
 		}
 	}
 
-	return apiv1.Service{}, fmt.Errorf("Could not find service %v in namespace %v", ingressServiceName, util.GetNamespace(flags))
+	return apiv1.Service{}, fmt.Errorf("Could not find service %v in namespace %v", name, util.GetNamespace(flags))
 }
 
 func getServices(flags *genericclioptions.ConfigFlags) ([]apiv1.Service, error) {

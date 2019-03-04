@@ -81,12 +81,18 @@ func main() {
 				return err
 			}
 
-			util.PrintError(conf(flags, host, pod))
+			deployment, err := cmd.Flags().GetString("deployment")
+			if err != nil {
+				return err
+			}
+
+			util.PrintError(conf(flags, host, pod, deployment))
 			return nil
 		},
 	}
 	confCmd.Flags().String("host", "", "Print just the server block with this hostname")
-	confCmd.Flags().String("pod", "", "Query a particular ingress-nginx pod")
+	addPodFlag(confCmd)
+	addDeploymentFlag(confCmd)
 	rootCmd.AddCommand(confCmd)
 
 	generalCmd := &cobra.Command{
@@ -98,21 +104,33 @@ func main() {
 				return err
 			}
 
-			util.PrintError(general(flags, pod))
+			deployment, err := cmd.Flags().GetString("deployment")
+			if err != nil {
+				return err
+			}
+
+			util.PrintError(general(flags, pod, deployment))
 			return nil
 		},
 	}
-	generalCmd.Flags().String("pod", "", "Query a particular ingress-nginx pod")
+	addPodFlag(generalCmd)
+	addDeploymentFlag(generalCmd)
 	rootCmd.AddCommand(generalCmd)
 
 	infoCmd := &cobra.Command{
 		Use:   "info",
 		Short: "Show information about the ingress-nginx service",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			util.PrintError(info(flags))
+			service, err := cmd.Flags().GetString("service")
+			if err != nil {
+				return err
+			}
+
+			util.PrintError(info(flags, service))
 			return nil
 		},
 	}
+	infoCmd.Flags().String("service", request.DefaultIngressServiceName, "The name of the ingress-nginx service")
 	rootCmd.AddCommand(infoCmd)
 
 	backendsCmd := &cobra.Command{
@@ -120,6 +138,10 @@ func main() {
 		Short: "Inspect the dynamic backend information of an ingress-nginx instance",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pod, err := cmd.Flags().GetString("pod")
+			if err != nil {
+				return err
+			}
+			deployment, err := cmd.Flags().GetString("deployment")
 			if err != nil {
 				return err
 			}
@@ -135,11 +157,12 @@ func main() {
 				return fmt.Errorf("--list and --backend cannot both be specified")
 			}
 
-			util.PrintError(backends(flags, pod, backend, onlyList))
+			util.PrintError(backends(flags, pod, deployment, backend, onlyList))
 			return nil
 		},
 	}
-	backendsCmd.Flags().String("pod", "", "Query a particular ingress-nginx pod")
+	addPodFlag(backendsCmd)
+	addDeploymentFlag(backendsCmd)
 	backendsCmd.Flags().String("backend", "", "Output only the information for the given backend")
 	backendsCmd.Flags().Bool("list", false, "Output a newline-separated list of backend names")
 	rootCmd.AddCommand(backendsCmd)
@@ -152,18 +175,23 @@ func main() {
 			if err != nil {
 				return err
 			}
+			deployment, err := cmd.Flags().GetString("deployment")
+			if err != nil {
+				return err
+			}
 			host, err := cmd.Flags().GetString("host")
 			if err != nil {
 				return err
 			}
 
-			util.PrintError(certs(flags, pod, host))
+			util.PrintError(certs(flags, pod, deployment, host))
 			return nil
 		},
 	}
 	certsCmd.Flags().String("host", "", "Get the cert for this hostname")
-	certsCmd.Flags().String("pod", "", "Query a particular ingress-nginx pod")
 	cobra.MarkFlagRequired(certsCmd.Flags(), "host")
+	addPodFlag(certsCmd)
+	addDeploymentFlag(certsCmd)
 	rootCmd.AddCommand(certsCmd)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -172,14 +200,22 @@ func main() {
 	}
 }
 
-func certs(flags *genericclioptions.ConfigFlags, pod string, host string) error {
+func addPodFlag(cmd *cobra.Command) {
+	cmd.Flags().String("pod", "", "Query a particular ingress-nginx pod")
+}
+
+func addDeploymentFlag(cmd *cobra.Command) {
+	cmd.Flags().String("deployment", request.DefaultIngressDeploymentName, "The name of the ingress-nginx deployment")
+}
+
+func certs(flags *genericclioptions.ConfigFlags, pod string, deployment string, host string) error {
 	command := []string{"/dbg", "certs", "get", host}
 	var out string
 	var err error
 	if pod != "" {
 		out, err = request.NamedPodExec(flags, pod, command)
 	} else {
-		out, err = request.IngressPodExec(flags, command)
+		out, err = request.DeploymentPodExec(flags, deployment, command)
 	}
 	if err != nil {
 		return err
@@ -189,8 +225,8 @@ func certs(flags *genericclioptions.ConfigFlags, pod string, host string) error 
 	return nil
 }
 
-func info(flags *genericclioptions.ConfigFlags) error {
-	service, err := request.GetIngressService(flags)
+func info(flags *genericclioptions.ConfigFlags, serviceName string) error {
+	service, err := request.GetServiceByName(flags, serviceName, nil)
 	if err != nil {
 		return err
 	}
@@ -200,7 +236,7 @@ func info(flags *genericclioptions.ConfigFlags) error {
 	return nil
 }
 
-func backends(flags *genericclioptions.ConfigFlags, pod string, backend string, onlyList bool) error {
+func backends(flags *genericclioptions.ConfigFlags, pod string, deployment string, backend string, onlyList bool) error {
 	var command []string
 	if onlyList {
 		command = []string{"/dbg", "backends", "list"}
@@ -215,7 +251,7 @@ func backends(flags *genericclioptions.ConfigFlags, pod string, backend string, 
 	if pod != "" {
 		out, err = request.NamedPodExec(flags, pod, command)
 	} else {
-		out, err = request.IngressPodExec(flags, command)
+		out, err = request.DeploymentPodExec(flags, deployment, command)
 	}
 	if err != nil {
 		return err
@@ -225,13 +261,13 @@ func backends(flags *genericclioptions.ConfigFlags, pod string, backend string, 
 	return nil
 }
 
-func general(flags *genericclioptions.ConfigFlags, pod string) error {
+func general(flags *genericclioptions.ConfigFlags, pod string, deployment string) error {
 	var general string
 	var err error
 	if pod != "" {
 		general, err = request.NamedPodExec(flags, pod, []string{"/dbg", "general"})
 	} else {
-		general, err = request.IngressPodExec(flags, []string{"/dbg", "general"})
+		general, err = request.DeploymentPodExec(flags, deployment, []string{"/dbg", "general"})
 	}
 	if err != nil {
 		return err
@@ -292,13 +328,13 @@ func ingresses(flags *genericclioptions.ConfigFlags, host string, allNamespaces 
 	return nil
 }
 
-func conf(flags *genericclioptions.ConfigFlags, host string, pod string) error {
+func conf(flags *genericclioptions.ConfigFlags, host string, pod string, deployment string) error {
 	var nginxConf string
 	var err error
 	if pod != "" {
 		nginxConf, err = request.NamedPodExec(flags, pod, []string{"/dbg", "conf"})
 	} else {
-		nginxConf, err = request.IngressPodExec(flags, []string{"/dbg", "conf"})
+		nginxConf, err = request.DeploymentPodExec(flags, deployment, []string{"/dbg", "conf"})
 	}
 	if err != nil {
 		return err
