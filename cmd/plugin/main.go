@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"os"
+	"io"
 	"strings"
 	"text/tabwriter"
 
@@ -194,6 +195,33 @@ func main() {
 	addDeploymentFlag(certsCmd)
 	rootCmd.AddCommand(certsCmd)
 
+	logsCmd := &cobra.Command{
+		Use:   "logs",
+		Short: "Get the kubernetes logs for an ingress-nginx pod",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pod, err := cmd.Flags().GetString("pod")
+			if err != nil {
+				return err
+			}
+			deployment, err := cmd.Flags().GetString("deployment")
+			if err != nil {
+				return err
+			}
+			follow, err := cmd.Flags().GetBool("follow")
+			if err != nil {
+				return err
+			}
+
+
+			util.PrintError(logs(flags, pod, deployment, follow))
+			return nil
+		},
+	}
+	addPodFlag(logsCmd)
+	addDeploymentFlag(logsCmd)
+	logsCmd.Flags().BoolP("follow", "f", false, "Follow the logs as they are written")
+	rootCmd.AddCommand(logsCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -206,6 +234,23 @@ func addPodFlag(cmd *cobra.Command) {
 
 func addDeploymentFlag(cmd *cobra.Command) {
 	cmd.Flags().String("deployment", request.DefaultIngressDeploymentName, "The name of the ingress-nginx deployment")
+}
+
+func logs(flags *genericclioptions.ConfigFlags, pod string, deployment string, follow bool) error {
+	var stream io.Reader
+	var err error
+	if pod != "" {
+		stream, err = request.NamedPodLogs(flags, pod, follow)
+	} else {
+		stream, err = request.DeploymentPodLogs(flags, deployment, follow)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(os.Stdout, stream)
+	return err
 }
 
 func certs(flags *genericclioptions.ConfigFlags, pod string, deployment string, host string) error {
